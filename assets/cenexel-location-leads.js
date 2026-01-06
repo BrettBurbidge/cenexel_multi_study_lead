@@ -18,6 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
       email: (fd.get("email") || "").toString().trim(),
       phone: (fd.get("phone") || "").toString().trim(),
       zip: (fd.get("zip") || "").toString().trim(),
+      date_of_birth: (fd.get("date_of_birth") || "").toString().trim(),
+      gender: (fd.get("gender") || "").toString(),
+      is_caregiver:
+        fd.get("is_caregiver") === "1" || fd.get("is_caregiver") === "on",
       consent: fd.get("consent") === "on",
       post_ids: fd
         .getAll("post_ids[]")

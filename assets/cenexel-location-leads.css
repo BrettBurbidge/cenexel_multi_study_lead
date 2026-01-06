@@ -1,0 +1,211 @@
+/* Lead form */
+.cenexel-location-landing {
+  max-width: 820px;
+  margin: 0 auto;
+  font-family: "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
+}
+
+.cenexel-location-landing h1 {
+  font-size: 2.1rem;
+  margin-bottom: 0.4rem;
+}
+
+.cenexel-location-name {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #1f3ea8;
+  margin-bottom: 1.25rem;
+}
+
+.cenexel-form-card {
+  background: #f5f7fb;
+  border-radius: 14px;
+  border: 1px solid #dfe7f3;
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.35rem 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.cenexel-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.cenexel-form-card .cenexel-checkbox {
+  grid-column: 1 / -1;
+}
+
+.cenexel-field label {
+  font-weight: 700;
+  color: #5b5b5b;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.cenexel-field label span[aria-hidden="true"] {
+  color: #d04c2a;
+}
+
+.cenexel-field input,
+.cenexel-field select {
+  width: 100%;
+  border-radius: 9px;
+  border: 2px solid #00a0e3;
+  background: #fff;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  color: #1a202c;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.cenexel-field input::placeholder {
+  color: #9fa9bb;
+}
+
+.cenexel-field input:focus,
+.cenexel-field select:focus {
+  outline: none;
+  border-color: #0081c8;
+  box-shadow: 0 0 0 3px rgba(0, 129, 200, 0.15);
+}
+
+.cenexel-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%230081c8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 14px) center;
+  background-size: 14px;
+  padding-right: 2.5rem;
+}
+
+.cenexel-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.95rem;
+  color: #4a4a4a;
+}
+
+.cenexel-checkbox span {
+  line-height: 1.4;
+}
+
+.cenexel-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.cenexel-checkbox a {
+  color: #6c2db5;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cenexel-checkbox a:hover,
+.cenexel-checkbox a:focus {
+  text-decoration: underline;
+}
+
+#cenexel-lead-form button {
+  background: #0073e6;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.95rem 1.75rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+#cenexel-lead-form button:hover,
+#cenexel-lead-form button:focus {
+  background: #005dc1;
+  box-shadow: 0 8px 18px rgba(0, 92, 193, 0.25);
+}
+
+#cenexel-status {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: #1a202c;
+}
+
+.cenexel-location-landing h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #00a3ff;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Studies list */
+.cenexel-studies {
+  margin-top: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.cenexel-study-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.cenexel-study-row:last-child {
+  border-bottom: none;
+}
+
+.cenexel-study-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.cenexel-study-checkbox {
+  margin-top: 0.35rem;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.cenexel-study-text {
+  min-width: 0;
+}
+
+.cenexel-study-title {
+  display: inline-block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #1f3ea8;
+  text-decoration: none;
+}
+
+.cenexel-study-title:hover,
+.cenexel-study-title:focus {
+  text-decoration: underline;
+}
+
+.cenexel-study-subtitle {
+  margin-top: 0.35rem;
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+@media (min-width: 680px) {
+  .cenexel-form-card {
+    padding: 2rem;
+  }
+}
