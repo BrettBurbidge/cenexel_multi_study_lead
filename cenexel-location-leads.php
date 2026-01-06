@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.9.0
+ * Version: 0.9.1
  */
 
 if (!defined('ABSPATH')) exit;
@@ -39,20 +39,10 @@ class Cenexel_Location_Leads {
     'wpcf-utm-term',
   ];
 
-  // GitHub update configuration
-  const GITHUB_USERNAME = 'brettburbidge'; // Change this
-  const GITHUB_REPO = 'cenexel_multi_study_lead'; // Change this to your repo name
-  const GITHUB_PLUGIN_FILE = 'cenexel-location-leads.php'; // Plugin file path in repo
-
   public function __construct() {
     add_action('init', [$this, 'register_shortcode']);
     add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
     add_action('rest_api_init', [$this, 'register_rest']);
-    
-    // GitHub update checker
-    add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_updates']);
-    add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
-    add_filter('upgrader_post_install', [$this, 'post_install'], 10, 3);
   }
 
   public function register_shortcode() {
@@ -836,175 +826,6 @@ class Cenexel_Location_Leads {
     }
 
     return new WP_REST_Response(['ok' => true], 200);
-  }
-
-  /**
-   * Check for plugin updates from GitHub
-   */
-  public function check_for_updates($transient) {
-    if (empty($transient->checked)) {
-      return $transient;
-    }
-
-    $plugin_slug = plugin_basename(__FILE__);
-    $plugin_data = get_plugin_data(__FILE__);
-    $current_version = $plugin_data['Version'];
-
-    // Get latest release from GitHub
-    $release_data = $this->get_github_release_info();
-
-    if (!$release_data || !isset($release_data['tag_name'])) {
-      return $transient;
-    }
-
-    $latest_version = ltrim($release_data['tag_name'], 'v');
-    
-    // Compare versions
-    if (version_compare($current_version, $latest_version, '<')) {
-      $plugin_data = get_plugin_data(__FILE__);
-      
-      $transient->response[$plugin_slug] = (object)[
-        'slug'        => dirname($plugin_slug),
-        'plugin'      => $plugin_slug,
-        'new_version' => $latest_version,
-        'url'         => $plugin_data['PluginURI'] ?? '',
-        'package'     => $this->get_github_download_url($release_data['tag_name']),
-      ];
-    }
-
-    return $transient;
-  }
-
-  /**
-   * Get plugin info for update details
-   */
-  public function plugin_info($false, $action, $args) {
-    $plugin_slug = plugin_basename(__FILE__);
-
-    if ($action !== 'plugin_information' || $args->slug !== dirname($plugin_slug)) {
-      return $false;
-    }
-
-    $release_data = $this->get_github_release_info();
-    
-    if (!$release_data) {
-      return $false;
-    }
-
-    $plugin_data = get_plugin_data(__FILE__);
-    $latest_version = ltrim($release_data['tag_name'], 'v');
-    
-    $info = new \stdClass();
-    $info->name = $plugin_data['Name'];
-    $info->slug = dirname($plugin_slug);
-    $info->version = $latest_version;
-    $info->last_updated = $release_data['published_at'] ?? '';
-    $info->download_link = $this->get_github_download_url($release_data['tag_name']);
-    $info->homepage = 'https://github.com/' . self::GITHUB_USERNAME . '/' . self::GITHUB_REPO;
-    $info->sections = [
-      'description' => $plugin_data['Description'],
-      'changelog' => $this->format_release_notes($release_data),
-    ];
-    $info->banners = [];
-    $info->icons = [];
-
-    return $info;
-  }
-
-  /**
-   * Handle post-install actions
-   */
-  public function post_install($response, $hook_extra, $result) {
-    $plugin_slug = plugin_basename(__FILE__);
-    
-    if ($hook_extra['plugin'] !== $plugin_slug) {
-      return $response;
-    }
-
-    // Activate plugin after update
-    activate_plugin($plugin_slug);
-    
-    return $response;
-  }
-
-  /**
-   * Get latest release info from GitHub API
-   */
-  private function get_github_release_info() {
-    $cache_key = 'cenexel_location_leads_github_release';
-    $cache_time = 3600; // 1 hour
-
-    $cached = get_transient($cache_key);
-    if ($cached !== false) {
-      return $cached;
-    }
-
-    $api_url = sprintf(
-      'https://api.github.com/repos/%s/%s/releases/latest',
-      self::GITHUB_USERNAME,
-      self::GITHUB_REPO
-    );
-
-    $response = wp_remote_get($api_url, [
-      'timeout' => 10,
-      'headers' => [
-        'Accept' => 'application/vnd.github.v3+json',
-      ],
-    ]);
-
-    if (is_wp_error($response)) {
-      return null;
-    }
-
-    $code = wp_remote_retrieve_response_code($response);
-    if ($code !== 200) {
-      return null;
-    }
-
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
-
-    if (!$data || !isset($data['tag_name'])) {
-      return null;
-    }
-
-    // Cache the result
-    set_transient($cache_key, $data, $cache_time);
-
-    return $data;
-  }
-
-  /**
-   * Get GitHub download URL for a release
-   */
-  private function get_github_download_url($tag) {
-    return sprintf(
-      'https://github.com/%s/%s/releases/download/%s/%s-v%s.zip',
-      self::GITHUB_USERNAME,
-      self::GITHUB_REPO,
-      $tag,
-      self::GITHUB_REPO,
-      ltrim($tag, 'v')
-    );
-  }
-
-  /**
-   * Format release notes for display
-   */
-  private function format_release_notes($release_data) {
-    $notes = '<h3>Release Notes</h3>';
-    
-    if (isset($release_data['body']) && !empty($release_data['body'])) {
-      // Convert markdown to basic HTML
-      $body = $release_data['body'];
-      $body = esc_html($body);
-      $body = nl2br($body);
-      $notes .= '<p>' . $body . '</p>';
-    } else {
-      $notes .= '<p>No release notes available.</p>';
-    }
-
-    return $notes;
   }
 }
 

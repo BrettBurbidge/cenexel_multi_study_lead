@@ -18,18 +18,15 @@ if [ ! -f "release.json" ]; then
     exit 1
 fi
 
-# Function to increment minor version (e.g., 0.4.8 -> 0.4.9)
-increment_minor_version() {
+# Function to increment patch version (e.g., 0.8.0 -> 0.8.1)
+increment_patch_version() {
     local version=$1
     local major=$(echo "$version" | cut -d. -f1)
     local minor=$(echo "$version" | cut -d. -f2)
     local patch=$(echo "$version" | cut -d. -f3)
     
-    # Increment minor version
-    minor=$((minor + 1))
-    
-    # Reset patch to 0 when minor increments
-    patch=0
+    # Increment patch version
+    patch=$((patch + 1))
     
     echo "${major}.${minor}.${patch}"
 }
@@ -49,11 +46,12 @@ if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "null" ]; then
     exit 1
 fi
 
-# Increment minor version
-VERSION=$(increment_minor_version "$CURRENT_VERSION")
+# Increment patch version
+VERSION=$(increment_patch_version "$CURRENT_VERSION")
 RELEASE_DATE=$(date +%Y-%m-%d)
+VERSION_TAG="v${VERSION}"  # GitHub requires 'v' prefix for tags
 
-echo -e "${BLUE}Version bump: ${CURRENT_VERSION} → ${GREEN}${VERSION}${NC}"
+echo -e "${BLUE}Version bump: ${CURRENT_VERSION} → ${GREEN}${VERSION}${NC} (Tag: ${VERSION_TAG})"
 
 # Update release.json with new version and date
 PLUGIN_FILE="cenexel-location-leads.php"
@@ -166,15 +164,15 @@ if [ -n "$GITHUB_TOKEN" ] && command -v gh &> /dev/null; then
         if command -v jq &> /dev/null; then
             RELEASE_NOTES=$(jq -r '.notes[] | "- \(.)"' release.json | tr '\n' '\r' | sed 's/\r/\\n/g')
         else
-            RELEASE_NOTES="Release v${VERSION}"
+            RELEASE_NOTES="Release ${VERSION_TAG}"
         fi
         
-        # Create GitHub release
-        gh release create "v${VERSION}" \
+        # Create GitHub release (with 'v' prefix)
+        gh release create "${VERSION_TAG}" \
             "$ZIP_PATH" \
-            --title "v${VERSION}" \
+            --title "${VERSION_TAG}" \
             --notes "$RELEASE_NOTES" \
-            --repo "${GITHUB_USERNAME:-your-username}/${GITHUB_REPO:-cenexel-location-leads}"
+            --repo "${GITHUB_USERNAME:-brettburbidge}/${GITHUB_REPO:-cenexel_multi_study_lead}"
         
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Published to GitHub!${NC}"
