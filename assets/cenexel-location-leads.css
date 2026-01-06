@@ -1,5 +1,116 @@
 /* ===== CenExel Location Lead Landing ===== */
 
+/* Lead form */
+.cenexel-location-landing {
+  max-width: 820px;
+  margin: 0 auto;
+  font-family: "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
+}
+
+.cenexel-form-card {
+  background: #f5f7fb;
+  border-radius: 14px;
+  border: 1px solid #dfe7f3;
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.35rem 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.cenexel-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.cenexel-form-card .cenexel-checkbox {
+  grid-column: 1 / -1;
+}
+
+.cenexel-field label {
+  font-weight: 700;
+  color: #5b5b5b;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.cenexel-field label span[aria-hidden="true"] {
+  color: #d04c2a;
+}
+
+.cenexel-field input,
+.cenexel-field select {
+  width: 100%;
+  border-radius: 9px;
+  border: 2px solid #00a0e3;
+  background: #fff;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  color: #1a202c;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.cenexel-field input::placeholder {
+  color: #9fa9bb;
+}
+
+.cenexel-field input:focus,
+.cenexel-field select:focus {
+  outline: none;
+  border-color: #0081c8;
+  box-shadow: 0 0 0 3px rgba(0, 129, 200, 0.15);
+}
+
+.cenexel-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%230081c8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 14px) center;
+  background-size: 14px;
+  padding-right: 2.5rem;
+}
+
+.cenexel-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.95rem;
+  color: #4a4a4a;
+}
+
+.cenexel-checkbox span {
+  line-height: 1.4;
+}
+
+.cenexel-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.cenexel-checkbox a {
+  color: #6c2db5;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cenexel-checkbox a:hover,
+.cenexel-checkbox a:focus {
+  text-decoration: underline;
+}
+
+
+#cenexel-status {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: #1a202c;
+}
+
 /* Study list styling */
 .cenexel-studies {
   margin-top: 1.25rem;
@@ -54,11 +165,6 @@
   line-height: 1.35;
 }
 
-.cenexel-consent {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
 
 /* ===== Location hero (Option B) ===== */
 
@@ -105,6 +211,18 @@
   margin-bottom: 0.85rem;
 }
 
+.cenexel-location-hero-address-link {
+  color: rgba(15, 23, 42, 0.65);
+  text-decoration: none;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.cenexel-location-hero-address-link:hover,
+.cenexel-location-hero-address-link:focus {
+  color: rgba(15, 23, 42, 0.85);
+  text-decoration: underline;
+}
+
 .cenexel-location-hero-phone {
   display: flex;
   align-items: baseline;
@@ -117,20 +235,127 @@
   color: rgba(15, 23, 42, 0.70);
 }
 
-.cenexel-location-hero-phone a {
+.cenexel-location-hero-phone-link {
   color: rgba(15, 23, 42, 0.85);
   text-decoration: none;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
 }
 
-.cenexel-location-hero-phone a:hover,
-.cenexel-location-hero-phone a:focus {
+.cenexel-location-hero-phone-link:hover,
+.cenexel-location-hero-phone-link:focus {
+  color: rgba(15, 23, 42, 1);
   text-decoration: underline;
+}
+
+.cenexel-step {
+  margin-bottom: 2rem;
+}
+
+.cenexel-step-instructions {
+  font-size: 1.1rem;
+  color: rgba(15, 23, 42, 0.7);
+  margin-bottom: 1.5rem;
 }
 
 .cenexel-available-studies-title {
   font-size: 2rem;
   font-weight: 800;
+  margin: 0 0 0.5rem;
+}
+
+.cenexel-form-title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+  color: #1f3ea8;
+}
+
+.cenexel-no-studies {
+  padding: 2rem;
+  text-align: center;
+  color: rgba(15, 23, 42, 0.6);
+  font-size: 1.1rem;
+}
+
+.cenexel-continue-button,
+.cenexel-submit-button {
+  background: #0073e6;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 1rem 2.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  margin-top: 1.5rem;
+  display: inline-block;
+}
+
+.cenexel-continue-button:hover:not(:disabled),
+.cenexel-continue-button:focus:not(:disabled),
+.cenexel-submit-button:hover,
+.cenexel-submit-button:focus {
+  background: #005dc1;
+  box-shadow: 0 8px 18px rgba(0, 92, 193, 0.25);
+}
+
+.cenexel-continue-button:disabled {
+  background: #9fa9bb;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.cenexel-error-message {
+  color: #d04c2a;
+  font-size: 0.95rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #fee;
+  border-radius: 6px;
+  border: 1px solid #fcc;
+}
+
+.cenexel-status-loading {
+  color: #0073e6;
+  font-weight: 600;
+}
+
+.cenexel-status-error {
+  color: #d04c2a;
+  font-weight: 600;
+}
+
+.cenexel-thank-you {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  background: #f5f7fb;
+  border-radius: 14px;
+  border: 1px solid #dfe7f3;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+}
+
+.cenexel-thank-you-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1f3ea8;
   margin: 0 0 1rem;
+}
+
+.cenexel-thank-you-message {
+  font-size: 1.2rem;
+  color: rgba(15, 23, 42, 0.75);
+  line-height: 1.6;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.cenexel-location-landing h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #00a3ff;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
 }
 
 /* ===== Responsive ===== */
@@ -187,5 +412,11 @@
 
   .cenexel-location-hero-title {
     font-size: 1.75rem;
+  }
+}
+
+@media (min-width: 680px) {
+  .cenexel-form-card {
+    padding: 2rem;
   }
 }

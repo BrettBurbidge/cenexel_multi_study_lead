@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.4.5
+ * Version: 0.6.0
  */
 
 if (!defined('ABSPATH')) exit;
@@ -39,10 +39,20 @@ class Cenexel_Location_Leads {
     'wpcf-utm-term',
   ];
 
+  // GitHub update configuration
+  const GITHUB_USERNAME = 'brettburbidge'; // Change this
+  const GITHUB_REPO = 'cenexel_multi_study_lead'; // Change this to your repo name
+  const GITHUB_PLUGIN_FILE = 'cenexel-location-leads.php'; // Plugin file path in repo
+
   public function __construct() {
     add_action('init', [$this, 'register_shortcode']);
     add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
     add_action('rest_api_init', [$this, 'register_rest']);
+    
+    // GitHub update checker
+    add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_updates']);
+    add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
+    add_filter('upgrader_post_install', [$this, 'post_install'], 10, 3);
   }
 
   public function register_shortcode() {
@@ -133,6 +143,44 @@ class Cenexel_Location_Leads {
     return null;
   }
 
+  private function resolve_location_post(string $requested_slug) {
+    if (!$requested_slug) return null;
+
+    // Try common location post type slugs
+    $location_post_types = ['location', 'locations', 'cenexel-location', 'cenexel-locations'];
+    
+    foreach ($location_post_types as $post_type) {
+      if (!post_type_exists($post_type)) continue;
+      
+      $post = get_page_by_path($requested_slug, OBJECT, $post_type);
+      if ($post && $post->post_status === 'publish') {
+        return $post;
+      }
+    }
+
+    // Also try by meta value (landing slug)
+    global $wpdb;
+    $sql = $wpdb->prepare(
+      "SELECT p.ID
+       FROM {$wpdb->posts} p
+       INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+       WHERE p.post_status = 'publish'
+       AND pm.meta_key = %s
+       AND pm.meta_value = %s
+       LIMIT 1",
+      self::TERM_META_LANDING_SLUG,
+      $requested_slug
+    );
+
+    $post_id = (int)$wpdb->get_var($sql);
+    if ($post_id) {
+      $post = get_post($post_id);
+      if ($post) return $post;
+    }
+
+    return null;
+  }
+
   private function get_clinical_trial_post_type(): string {
     foreach ($this->clinical_trial_post_types as $pt) {
       if (post_type_exists($pt)) return $pt;
@@ -154,14 +202,38 @@ class Cenexel_Location_Leads {
     return '';
   }
 
+  private function get_post_meta_first_nonempty(int $post_id, array $keys): string {
+    foreach ($keys as $k) {
+      $v = get_post_meta($post_id, $k, true);
+      if (is_string($v)) {
+        $v = trim($v);
+        if ($v !== '') return $v;
+      } elseif (is_numeric($v)) {
+        $v = trim((string)$v);
+        if ($v !== '') return $v;
+      }
+    }
+    return '';
+  }
+
   private function resolve_term_image_url(int $term_id): string {
+    // Expanded list of common meta keys for location images
     $candidates = [
       'location_image',
+      'location_photo',
+      'building_image',
+      'site_image',
+      'facility_image',
       'image',
+      'photo',
       'thumbnail_id',
       'term_image',
       'featured_image',
       'jet_term_image',
+      'wpcf-location-image',
+      'acf_location_image',
+      'location_thumbnail',
+      '_thumbnail_id',
     ];
 
     $raw = $this->get_term_meta_first_nonempty($term_id, $candidates);
@@ -173,10 +245,61 @@ class Cenexel_Location_Leads {
 
     if (ctype_digit($raw)) {
       $url = wp_get_attachment_image_url((int)$raw, 'large');
+      if ($url) return esc_url_raw($url);
+      
+      // Try full size if large doesn't exist
+      $url = wp_get_attachment_image_url((int)$raw, 'full');
       return $url ? esc_url_raw($url) : '';
     }
 
     return '';
+  }
+
+  private function resolve_post_image_url(int $post_id): string {
+    // First try featured image
+    $thumbnail_id = get_post_thumbnail_id($post_id);
+    if ($thumbnail_id) {
+      $url = wp_get_attachment_image_url($thumbnail_id, 'large');
+      if ($url) return esc_url_raw($url);
+    }
+
+    // Then try meta fields (same candidates as term meta)
+    $candidates = [
+      'location_image',
+      'location_photo',
+      'building_image',
+      'site_image',
+      'facility_image',
+      'image',
+      'photo',
+      'thumbnail_id',
+      '_thumbnail_id',
+      'wpcf-location-image',
+      'acf_location_image',
+    ];
+
+    $raw = $this->get_post_meta_first_nonempty($post_id, $candidates);
+    if ($raw === '') return '';
+
+    if (filter_var($raw, FILTER_VALIDATE_URL)) {
+      return esc_url_raw($raw);
+    }
+
+    if (ctype_digit($raw)) {
+      $url = wp_get_attachment_image_url((int)$raw, 'large');
+      if ($url) return esc_url_raw($url);
+      $url = wp_get_attachment_image_url((int)$raw, 'full');
+      return $url ? esc_url_raw($url) : '';
+    }
+
+    return '';
+  }
+
+  private function build_google_maps_url(string $address, string $city, string $state, string $zip): string {
+    // Build a Google Maps search URL from address components
+    $parts = array_filter([$address, $city, $state, $zip]);
+    $query = urlencode(implode(', ', $parts));
+    return "https://www.google.com/maps/search/?api=1&query={$query}";
   }
 
   private function render_location_hero($term): string {
@@ -215,29 +338,185 @@ class Cenexel_Location_Leads {
 
     $image_url = $this->resolve_term_image_url($term_id);
 
-    $city_state = trim(implode(', ', array_filter([$city, $state])));
-    $address_line = trim(implode(' ', array_filter([$address, $city_state, $zip])));
+    // Format title: "CenExel [Location], [State]" to match screenshot format
+    $location_name = trim($term->name);
+    
+    // Ensure "CenExel" prefix
+    if (stripos($location_name, 'CenExel') === false) {
+      $formatted_title = 'CenExel ' . $location_name;
+    } else {
+      $formatted_title = $location_name;
+    }
+    
+    // Add city, state if available and not already in the name
+    if ($city && $state) {
+      $city_state = $city . ', ' . $state;
+      if (stripos($formatted_title, $city_state) === false && stripos($formatted_title, $city) === false) {
+        // Append if not already present
+        $formatted_title .= ', ' . $city_state;
+      } elseif (stripos($formatted_title, $city) !== false && stripos($formatted_title, $state) === false) {
+        // City is in name but state is not - try to add state
+        $formatted_title .= ', ' . $state;
+      }
+    } elseif ($state && stripos($formatted_title, $state) === false) {
+      $formatted_title .= ', ' . $state;
+    }
+    
+    $formatted_title = esc_html($formatted_title);
+
+    // Build address line for display
+    $address_parts = array_filter([$address, $city, $state]);
+    $address_line = trim(implode(', ', $address_parts));
+    if ($zip) {
+      $address_line .= ($address_line ? ', ' : '') . $zip;
+    }
+
+    // Build Google Maps URL
+    $google_maps_url = '';
+    if ($address || $city || $state || $zip) {
+      $google_maps_url = $this->build_google_maps_url($address, $city, $state, $zip);
+    }
 
     ob_start(); ?>
       <section class="cenexel-location-hero">
         <div class="cenexel-location-hero-inner">
           <?php if ($image_url): ?>
             <div class="cenexel-location-hero-image">
-              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($term->name); ?>" />
+              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" />
             </div>
           <?php endif; ?>
 
           <div class="cenexel-location-hero-text">
-            <h1 class="cenexel-location-hero-title"><?php echo esc_html($term->name); ?></h1>
+            <h1 class="cenexel-location-hero-title"><?php echo esc_html($formatted_title); ?></h1>
 
             <?php if ($address_line): ?>
-              <div class="cenexel-location-hero-address"><?php echo esc_html($address_line); ?></div>
+              <div class="cenexel-location-hero-address">
+                <?php if ($google_maps_url): ?>
+                  <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link">
+                    <?php echo esc_html($address_line); ?>
+                  </a>
+                <?php else: ?>
+                  <?php echo esc_html($address_line); ?>
+                <?php endif; ?>
+              </div>
             <?php endif; ?>
 
             <?php if ($phone): ?>
               <div class="cenexel-location-hero-phone">
                 <span class="cenexel-location-hero-phone-label">Phone</span>
-                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>">
+                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link">
+                  <?php echo esc_html($phone); ?>
+                </a>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      </section>
+    <?php
+    return ob_get_clean();
+  }
+
+  private function render_location_hero_from_post($post): string {
+    if (!$post || is_wp_error($post)) return '';
+
+    $post_id = (int)$post->ID;
+
+    $address = $this->get_post_meta_first_nonempty($post_id, [
+      'address',
+      'location_address',
+      'street_address',
+    ]);
+
+    $city = $this->get_post_meta_first_nonempty($post_id, [
+      'city',
+      'location_city',
+    ]);
+
+    $state = $this->get_post_meta_first_nonempty($post_id, [
+      'state',
+      'state_acronym',
+      'location_state',
+    ]);
+
+    $zip = $this->get_post_meta_first_nonempty($post_id, [
+      'zip',
+      'zipcode',
+      'postal_code',
+    ]);
+
+    $phone = $this->get_post_meta_first_nonempty($post_id, [
+      'phone',
+      'location_phone',
+      'telephone',
+    ]);
+
+    $image_url = $this->resolve_post_image_url($post_id);
+
+    // Format title: "CenExel [Location], [State]" to match screenshot format
+    $location_name = trim($post->post_title);
+    
+    // Ensure "CenExel" prefix
+    if (stripos($location_name, 'CenExel') === false) {
+      $formatted_title = 'CenExel ' . $location_name;
+    } else {
+      $formatted_title = $location_name;
+    }
+    
+    // Add city, state if available
+    if ($city && $state) {
+      $city_state = $city . ', ' . $state;
+      if (stripos($formatted_title, $city_state) === false && stripos($formatted_title, $city) === false) {
+        $formatted_title .= ', ' . $city_state;
+      } elseif (stripos($formatted_title, $city) !== false && stripos($formatted_title, $state) === false) {
+        $formatted_title .= ', ' . $state;
+      }
+    } elseif ($state && stripos($formatted_title, $state) === false) {
+      $formatted_title .= ', ' . $state;
+    }
+    
+    $formatted_title = esc_html($formatted_title);
+
+    // Build address line for display
+    $address_parts = array_filter([$address, $city, $state]);
+    $address_line = trim(implode(', ', $address_parts));
+    if ($zip) {
+      $address_line .= ($address_line ? ', ' : '') . $zip;
+    }
+
+    // Build Google Maps URL
+    $google_maps_url = '';
+    if ($address || $city || $state || $zip) {
+      $google_maps_url = $this->build_google_maps_url($address, $city, $state, $zip);
+    }
+
+    ob_start(); ?>
+      <section class="cenexel-location-hero">
+        <div class="cenexel-location-hero-inner">
+          <?php if ($image_url): ?>
+            <div class="cenexel-location-hero-image">
+              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" />
+            </div>
+          <?php endif; ?>
+
+          <div class="cenexel-location-hero-text">
+            <h1 class="cenexel-location-hero-title"><?php echo esc_html($formatted_title); ?></h1>
+
+            <?php if ($address_line): ?>
+              <div class="cenexel-location-hero-address">
+                <?php if ($google_maps_url): ?>
+                  <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link">
+                    <?php echo esc_html($address_line); ?>
+                  </a>
+                <?php else: ?>
+                  <?php echo esc_html($address_line); ?>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+
+            <?php if ($phone): ?>
+              <div class="cenexel-location-hero-phone">
+                <span class="cenexel-location-hero-phone-label">Phone</span>
+                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link">
                   <?php echo esc_html($phone); ?>
                 </a>
               </div>
@@ -308,39 +587,37 @@ class Cenexel_Location_Leads {
       </div>";
     }
 
+    // Try taxonomy term first (existing behavior)
     $term = $this->resolve_location_term($site_slug);
     $term_id = $term ? (int)$term->term_id : null;
+    
+    // If no term found, try as post
+    $location_post = null;
+    if (!$term) {
+      $location_post = $this->resolve_location_post($site_slug);
+    }
 
     $posts = $this->query_trials_for_site($site_slug, $term_id);
 
     ob_start(); ?>
       <div class="cenexel-location-landing">
 
-        <?php echo $term ? $this->render_location_hero($term) : ''; ?>
+        <?php 
+        if ($term) {
+          echo $this->render_location_hero($term);
+        } elseif ($location_post) {
+          echo $this->render_location_hero_from_post($location_post);
+        }
+        ?>
 
-        <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
-
-        <form id="cenexel-lead-form">
-          <input type="hidden" name="location_term_id" value="<?php echo esc_attr($term_id ?: 0); ?>" />
-          <input type="hidden" name="site_slug" value="<?php echo esc_attr($site_slug); ?>" />
-
-          <div class="cenexel-fields">
-            <label>First Name <input name="first_name" required /></label>
-            <label>Last Name <input name="last_name" required /></label>
-            <label>Email <input name="email" type="email" required /></label>
-            <label>Phone <input name="phone" /></label>
-            <label>ZIP <input name="zip" /></label>
-            <label class="cenexel-consent">
-              <input type="checkbox" name="consent" required />
-              I agree to be contacted about clinical trials.
-            </label>
-          </div>
-
-          <h2>Select studies you’re interested in</h2>
+        <!-- Step 1: Study Selection -->
+        <div id="cenexel-step-studies" class="cenexel-step">
+          <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
+          <p class="cenexel-step-instructions">Please select the studies you're interested in:</p>
 
           <div class="cenexel-studies">
             <?php if (empty($posts)): ?>
-              <div>No studies found for this site.</div>
+              <div class="cenexel-no-studies">No studies found for this site.</div>
             <?php else: ?>
               <?php foreach ($posts as $p):
                 $post_id = (int)$p->ID;
@@ -379,9 +656,87 @@ class Cenexel_Location_Leads {
             <?php endif; ?>
           </div>
 
-          <button type="submit">Submit</button>
-          <div id="cenexel-status" aria-live="polite"></div>
-        </form>
+          <?php if (!empty($posts)): ?>
+            <button type="button" id="cenexel-continue-btn" class="cenexel-continue-button" disabled>
+              Continue
+            </button>
+            <div id="cenexel-study-error" class="cenexel-error-message" style="display: none;"></div>
+          <?php endif; ?>
+        </div>
+
+        <!-- Step 2: Form -->
+        <div id="cenexel-step-form" class="cenexel-step" style="display: none;">
+          <h2 class="cenexel-form-title">Your Information</h2>
+          <p class="cenexel-step-instructions">Please fill out the form below to continue:</p>
+
+          <form id="cenexel-lead-form">
+            <input type="hidden" name="location_term_id" value="<?php echo esc_attr($term_id ?: 0); ?>" />
+            <input type="hidden" name="site_slug" value="<?php echo esc_attr($site_slug); ?>" />
+
+            <div class="cenexel-form-card">
+              <div class="cenexel-field">
+                <label for="cenexel-first-name">First Name <span aria-hidden="true">*</span></label>
+                <input id="cenexel-first-name" name="first_name" placeholder="Enter your first name" autocomplete="given-name" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-last-name">Last Name <span aria-hidden="true">*</span></label>
+                <input id="cenexel-last-name" name="last_name" placeholder="Enter your last name" autocomplete="family-name" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-email">Email <span aria-hidden="true">*</span></label>
+                <input id="cenexel-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-phone">Phone <span aria-hidden="true">*</span></label>
+                <input id="cenexel-phone" name="phone" type="tel" placeholder="Enter your phone" autocomplete="tel" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-zip">ZIP/Postal Code <span aria-hidden="true">*</span></label>
+                <input id="cenexel-zip" name="zip" placeholder="Enter your zip" autocomplete="postal-code" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-dob">Date of Birth <span aria-hidden="true">*</span></label>
+                <input id="cenexel-dob" name="date_of_birth" type="date" placeholder="mm/dd/yyyy" required />
+              </div>
+              <div class="cenexel-field">
+                <label for="cenexel-gender">Gender <span aria-hidden="true">*</span></label>
+                <select id="cenexel-gender" name="gender" required>
+                  <option value="">Please select</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="non-binary">Non-binary</option>
+                  <option value="prefer-not-to-say">Prefer not to say</option>
+                </select>
+              </div>
+              <label class="cenexel-checkbox">
+                <input type="checkbox" name="is_caregiver" value="1" />
+                <span>I am the caregiver or guardian.</span>
+              </label>
+              <label class="cenexel-checkbox cenexel-checkbox-required">
+                <input type="checkbox" name="consent" required />
+                <span>
+                  I have read and agree to the
+                  <a href="https://cenexelresearch.com/privacy-policy/" target="_blank" rel="noopener noreferrer">
+                    Privacy Policy and Terms of Service
+                  </a>.
+                </span>
+              </label>
+            </div>
+
+            <button type="submit" class="cenexel-submit-button">Submit</button>
+            <div id="cenexel-status" aria-live="polite"></div>
+          </form>
+        </div>
+
+        <!-- Step 3: Thank You -->
+        <div id="cenexel-step-thankyou" class="cenexel-step" style="display: none;">
+          <div class="cenexel-thank-you">
+            <h2 class="cenexel-thank-you-title">Thank You!</h2>
+            <p class="cenexel-thank-you-message">
+              We have received your information and will contact you shortly about the clinical trial studies you're interested in.
+            </p>
+          </div>
+        </div>
       </div>
     <?php
     return ob_get_clean();
@@ -421,6 +776,7 @@ class Cenexel_Location_Leads {
 
     $data = $req->get_json_params();
 
+    $post_ids_raw = is_array($data['post_ids'] ?? []) ? $data['post_ids'] : [];
     $payload = [
       'location_term_id' => (int)($data['location_term_id'] ?? 0),
       'site_slug'        => sanitize_title($data['site_slug'] ?? ''),
@@ -429,8 +785,11 @@ class Cenexel_Location_Leads {
       'email'            => sanitize_email($data['email'] ?? ''),
       'phone'            => sanitize_text_field($data['phone'] ?? ''),
       'zip'              => sanitize_text_field($data['zip'] ?? ''),
+      'date_of_birth'    => sanitize_text_field($data['date_of_birth'] ?? ''),
+      'gender'           => sanitize_text_field($data['gender'] ?? ''),
+      'is_caregiver'     => (bool)($data['is_caregiver'] ?? false),
       'consent'          => (bool)($data['consent'] ?? false),
-      'post_ids'         => array_map('intval', is_array($data['post_ids'] ?? []) ? ($data['post_ids'] ?? []) : []),
+      'post_ids'         => array_map('intval', $post_ids_raw),
       'submitted_at'     => gmdate('c'),
       'source'           => 'cenexelclinicaltrials.com',
       'ip'               => $ip,
@@ -477,6 +836,175 @@ class Cenexel_Location_Leads {
     }
 
     return new WP_REST_Response(['ok' => true], 200);
+  }
+
+  /**
+   * Check for plugin updates from GitHub
+   */
+  public function check_for_updates($transient) {
+    if (empty($transient->checked)) {
+      return $transient;
+    }
+
+    $plugin_slug = plugin_basename(__FILE__);
+    $plugin_data = get_plugin_data(__FILE__);
+    $current_version = $plugin_data['Version'];
+
+    // Get latest release from GitHub
+    $release_data = $this->get_github_release_info();
+
+    if (!$release_data || !isset($release_data['tag_name'])) {
+      return $transient;
+    }
+
+    $latest_version = ltrim($release_data['tag_name'], 'v');
+    
+    // Compare versions
+    if (version_compare($current_version, $latest_version, '<')) {
+      $plugin_data = get_plugin_data(__FILE__);
+      
+      $transient->response[$plugin_slug] = (object)[
+        'slug'        => dirname($plugin_slug),
+        'plugin'      => $plugin_slug,
+        'new_version' => $latest_version,
+        'url'         => $plugin_data['PluginURI'] ?? '',
+        'package'     => $this->get_github_download_url($release_data['tag_name']),
+      ];
+    }
+
+    return $transient;
+  }
+
+  /**
+   * Get plugin info for update details
+   */
+  public function plugin_info($false, $action, $args) {
+    $plugin_slug = plugin_basename(__FILE__);
+
+    if ($action !== 'plugin_information' || $args->slug !== dirname($plugin_slug)) {
+      return $false;
+    }
+
+    $release_data = $this->get_github_release_info();
+    
+    if (!$release_data) {
+      return $false;
+    }
+
+    $plugin_data = get_plugin_data(__FILE__);
+    $latest_version = ltrim($release_data['tag_name'], 'v');
+    
+    $info = new \stdClass();
+    $info->name = $plugin_data['Name'];
+    $info->slug = dirname($plugin_slug);
+    $info->version = $latest_version;
+    $info->last_updated = $release_data['published_at'] ?? '';
+    $info->download_link = $this->get_github_download_url($release_data['tag_name']);
+    $info->homepage = 'https://github.com/' . self::GITHUB_USERNAME . '/' . self::GITHUB_REPO;
+    $info->sections = [
+      'description' => $plugin_data['Description'],
+      'changelog' => $this->format_release_notes($release_data),
+    ];
+    $info->banners = [];
+    $info->icons = [];
+
+    return $info;
+  }
+
+  /**
+   * Handle post-install actions
+   */
+  public function post_install($response, $hook_extra, $result) {
+    $plugin_slug = plugin_basename(__FILE__);
+    
+    if ($hook_extra['plugin'] !== $plugin_slug) {
+      return $response;
+    }
+
+    // Activate plugin after update
+    activate_plugin($plugin_slug);
+    
+    return $response;
+  }
+
+  /**
+   * Get latest release info from GitHub API
+   */
+  private function get_github_release_info() {
+    $cache_key = 'cenexel_location_leads_github_release';
+    $cache_time = 3600; // 1 hour
+
+    $cached = get_transient($cache_key);
+    if ($cached !== false) {
+      return $cached;
+    }
+
+    $api_url = sprintf(
+      'https://api.github.com/repos/%s/%s/releases/latest',
+      self::GITHUB_USERNAME,
+      self::GITHUB_REPO
+    );
+
+    $response = wp_remote_get($api_url, [
+      'timeout' => 10,
+      'headers' => [
+        'Accept' => 'application/vnd.github.v3+json',
+      ],
+    ]);
+
+    if (is_wp_error($response)) {
+      return null;
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+    if ($code !== 200) {
+      return null;
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+
+    if (!$data || !isset($data['tag_name'])) {
+      return null;
+    }
+
+    // Cache the result
+    set_transient($cache_key, $data, $cache_time);
+
+    return $data;
+  }
+
+  /**
+   * Get GitHub download URL for a release
+   */
+  private function get_github_download_url($tag) {
+    return sprintf(
+      'https://github.com/%s/%s/releases/download/%s/%s-v%s.zip',
+      self::GITHUB_USERNAME,
+      self::GITHUB_REPO,
+      $tag,
+      self::GITHUB_REPO,
+      ltrim($tag, 'v')
+    );
+  }
+
+  /**
+   * Format release notes for display
+   */
+  private function format_release_notes($release_data) {
+    $notes = '<h3>Release Notes</h3>';
+    
+    if (isset($release_data['body']) && !empty($release_data['body'])) {
+      // Convert markdown to basic HTML
+      $body = $release_data['body'];
+      $body = esc_html($body);
+      $body = nl2br($body);
+      $notes .= '<p>' . $body . '</p>';
+    } else {
+      $notes .= '<p>No release notes available.</p>';
+    }
+
+    return $notes;
   }
 }
 

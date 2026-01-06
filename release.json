@@ -1,0 +1,17 @@
+{
+  "version": "0.6.0",
+  "date": "2026-01-06",
+  "notes": [
+    "Restored form fields (Date of Birth, Gender, Caregiver checkbox)",
+    "Updated form styling to match design requirements",
+    "Fixed PHP handler to process all form fields",
+    "Enhanced location hero section to match site design",
+    "Expanded image field lookup with 15+ meta key candidates for better compatibility",
+    "Made address clickable with Google Maps link",
+    "Improved title formatting to display 'CenExel [Location], [State]' format",
+    "Added clickable phone number links",
+    "Created debug documentation for troubleshooting image fields"
+  ],
+  "author": "CenExel",
+  "plugin_slug": "cenexel-location-leads"
+}
