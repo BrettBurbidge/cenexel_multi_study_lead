@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.4.4
+ * Version: 0.4.5
  */
 
 if (!defined('ABSPATH')) exit;
@@ -60,20 +60,18 @@ class Cenexel_Location_Leads {
     }
     if (!$should_load) return;
 
-    // CSS
     wp_enqueue_style(
       'cenexel-location-leads',
       plugin_dir_url(__FILE__) . 'assets/cenexel-location-leads.css',
       [],
-      '0.4.2'
+      '0.4.3'
     );
 
-    // JS
     wp_register_script(
       'cenexel-location-leads-js',
       plugin_dir_url(__FILE__) . 'assets/cenexel-location-leads.js',
       [],
-      '0.4.2',
+      '0.4.3',
       true
     );
 
@@ -139,14 +137,121 @@ class Cenexel_Location_Leads {
     foreach ($this->clinical_trial_post_types as $pt) {
       if (post_type_exists($pt)) return $pt;
     }
-    // Fallback (if CPT not detected)
     return 'therapeutic-area';
+  }
+
+  private function get_term_meta_first_nonempty(int $term_id, array $keys): string {
+    foreach ($keys as $k) {
+      $v = get_term_meta($term_id, $k, true);
+      if (is_string($v)) {
+        $v = trim($v);
+        if ($v !== '') return $v;
+      } elseif (is_numeric($v)) {
+        $v = trim((string)$v);
+        if ($v !== '') return $v;
+      }
+    }
+    return '';
+  }
+
+  private function resolve_term_image_url(int $term_id): string {
+    $candidates = [
+      'location_image',
+      'image',
+      'thumbnail_id',
+      'term_image',
+      'featured_image',
+      'jet_term_image',
+    ];
+
+    $raw = $this->get_term_meta_first_nonempty($term_id, $candidates);
+    if ($raw === '') return '';
+
+    if (filter_var($raw, FILTER_VALIDATE_URL)) {
+      return esc_url_raw($raw);
+    }
+
+    if (ctype_digit($raw)) {
+      $url = wp_get_attachment_image_url((int)$raw, 'large');
+      return $url ? esc_url_raw($url) : '';
+    }
+
+    return '';
+  }
+
+  private function render_location_hero($term): string {
+    if (!$term || is_wp_error($term)) return '';
+
+    $term_id = (int)$term->term_id;
+
+    $address = $this->get_term_meta_first_nonempty($term_id, [
+      'address',
+      'location_address',
+      'street_address',
+    ]);
+
+    $city = $this->get_term_meta_first_nonempty($term_id, [
+      'city',
+      'location_city',
+    ]);
+
+    $state = $this->get_term_meta_first_nonempty($term_id, [
+      'state',
+      'state_acronym',
+      'location_state',
+    ]);
+
+    $zip = $this->get_term_meta_first_nonempty($term_id, [
+      'zip',
+      'zipcode',
+      'postal_code',
+    ]);
+
+    $phone = $this->get_term_meta_first_nonempty($term_id, [
+      'phone',
+      'location_phone',
+      'telephone',
+    ]);
+
+    $image_url = $this->resolve_term_image_url($term_id);
+
+    $city_state = trim(implode(', ', array_filter([$city, $state])));
+    $address_line = trim(implode(' ', array_filter([$address, $city_state, $zip])));
+
+    ob_start(); ?>
+      <section class="cenexel-location-hero">
+        <div class="cenexel-location-hero-inner">
+          <?php if ($image_url): ?>
+            <div class="cenexel-location-hero-image">
+              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($term->name); ?>" />
+            </div>
+          <?php endif; ?>
+
+          <div class="cenexel-location-hero-text">
+            <h1 class="cenexel-location-hero-title"><?php echo esc_html($term->name); ?></h1>
+
+            <?php if ($address_line): ?>
+              <div class="cenexel-location-hero-address"><?php echo esc_html($address_line); ?></div>
+            <?php endif; ?>
+
+            <?php if ($phone): ?>
+              <div class="cenexel-location-hero-phone">
+                <span class="cenexel-location-hero-phone-label">Phone</span>
+                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>">
+                  <?php echo esc_html($phone); ?>
+                </a>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      </section>
+    <?php
+    return ob_get_clean();
   }
 
   private function query_trials_for_site(string $site_slug, ?int $term_id): array {
     $post_type = $this->get_clinical_trial_post_type();
 
-    // Meta OR query for UTM Term meta keys
     $meta_or = ['relation' => 'OR'];
     foreach ($this->utm_term_meta_keys as $k) {
       $meta_or[] = [
@@ -167,7 +272,6 @@ class Cenexel_Location_Leads {
 
     $posts = $primary->posts ?: [];
 
-    // Optional fallback: taxonomy-based
     if ($term_id) {
       $secondary = new WP_Query([
         'post_type'      => $post_type,
@@ -211,63 +315,24 @@ class Cenexel_Location_Leads {
 
     ob_start(); ?>
       <div class="cenexel-location-landing">
-        <h1>Available Clinical Trial Studies</h1>
 
-        <div class="cenexel-location-name">
-          <?php echo esc_html($term ? $term->name : $site_slug); ?>
-        </div>
+        <?php echo $term ? $this->render_location_hero($term) : ''; ?>
+
+        <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
 
         <form id="cenexel-lead-form">
           <input type="hidden" name="location_term_id" value="<?php echo esc_attr($term_id ?: 0); ?>" />
           <input type="hidden" name="site_slug" value="<?php echo esc_attr($site_slug); ?>" />
 
-          <div class="cenexel-form-card">
-            <div class="cenexel-field">
-              <label for="cenexel-first-name">First Name <span aria-hidden="true">*</span></label>
-              <input id="cenexel-first-name" name="first_name" placeholder="Enter your first name" autocomplete="given-name" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-last-name">Last Name <span aria-hidden="true">*</span></label>
-              <input id="cenexel-last-name" name="last_name" placeholder="Enter your last name" autocomplete="family-name" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-email">Email <span aria-hidden="true">*</span></label>
-              <input id="cenexel-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-phone">Phone <span aria-hidden="true">*</span></label>
-              <input id="cenexel-phone" name="phone" type="tel" placeholder="Enter your phone" autocomplete="tel" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-zip">ZIP/Postal Code <span aria-hidden="true">*</span></label>
-              <input id="cenexel-zip" name="zip" placeholder="Enter your zip" autocomplete="postal-code" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-dob">Date of Birth <span aria-hidden="true">*</span></label>
-              <input id="cenexel-dob" name="date_of_birth" type="date" placeholder="MM/DD/YYYY" required />
-            </div>
-            <div class="cenexel-field">
-              <label for="cenexel-gender">Gender <span aria-hidden="true">*</span></label>
-              <select id="cenexel-gender" name="gender" required>
-                <option value="">Please select</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="non-binary">Non-binary</option>
-                <option value="prefer-not-to-say">Prefer not to say</option>
-              </select>
-            </div>
-            <label class="cenexel-checkbox">
-              <input type="checkbox" name="is_caregiver" value="1" />
-              <span>I am the caregiver or guardian.</span>
-            </label>
-            <label class="cenexel-checkbox cenexel-checkbox-required">
+          <div class="cenexel-fields">
+            <label>First Name <input name="first_name" required /></label>
+            <label>Last Name <input name="last_name" required /></label>
+            <label>Email <input name="email" type="email" required /></label>
+            <label>Phone <input name="phone" /></label>
+            <label>ZIP <input name="zip" /></label>
+            <label class="cenexel-consent">
               <input type="checkbox" name="consent" required />
-              <span>
-                I have read and agree to the
-                <a href="https://cenexelresearch.com/privacy-policy/" target="_blank" rel="noopener noreferrer">
-                  Privacy Policy and Terms of Service
-                </a>.
-              </span>
+              I agree to be contacted about clinical trials.
             </label>
           </div>
 
@@ -280,11 +345,9 @@ class Cenexel_Location_Leads {
               <?php foreach ($posts as $p):
                 $post_id = (int)$p->ID;
 
-                // Display: Study Title (meta) -> fallback to WP title
                 $study_title = trim((string)get_post_meta($post_id, self::META_STUDY_TITLE, true));
                 if ($study_title === '') $study_title = get_the_title($p);
 
-                // Display: Subtitle (meta)
                 $subtitle = trim((string)get_post_meta($post_id, self::META_SUBTITLE, true));
 
                 $permalink = get_permalink($p);
@@ -358,7 +421,6 @@ class Cenexel_Location_Leads {
 
     $data = $req->get_json_params();
 
-    $post_ids_raw = is_array($data['post_ids'] ?? []) ? $data['post_ids'] : [];
     $payload = [
       'location_term_id' => (int)($data['location_term_id'] ?? 0),
       'site_slug'        => sanitize_title($data['site_slug'] ?? ''),
@@ -367,34 +429,16 @@ class Cenexel_Location_Leads {
       'email'            => sanitize_email($data['email'] ?? ''),
       'phone'            => sanitize_text_field($data['phone'] ?? ''),
       'zip'              => sanitize_text_field($data['zip'] ?? ''),
-      'date_of_birth'    => sanitize_text_field($data['date_of_birth'] ?? ''),
-      'gender'           => sanitize_text_field($data['gender'] ?? ''),
-      'is_caregiver'     => (bool)($data['is_caregiver'] ?? false),
       'consent'          => (bool)($data['consent'] ?? false),
-      'post_ids'         => array_map('intval', $post_ids_raw),
+      'post_ids'         => array_map('intval', is_array($data['post_ids'] ?? []) ? ($data['post_ids'] ?? []) : []),
       'submitted_at'     => gmdate('c'),
       'source'           => 'cenexelclinicaltrials.com',
       'ip'               => $ip,
       'user_agent'       => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
     ];
 
-    if (
-      !$payload['consent'] ||
-      !$payload['first_name'] ||
-      !$payload['last_name'] ||
-      !$payload['email'] ||
-      !$payload['phone'] ||
-      !$payload['zip'] ||
-      !$payload['date_of_birth'] ||
-      !$payload['gender'] ||
-      !$payload['site_slug']
-    ) {
+    if (!$payload['consent'] || !$payload['first_name'] || !$payload['last_name'] || !$payload['email'] || !$payload['site_slug']) {
       return new WP_REST_Response(['error' => 'Missing required fields.'], 400);
-    }
-
-    $allowed_genders = ['female', 'male', 'non-binary', 'prefer-not-to-say'];
-    if (!in_array($payload['gender'], $allowed_genders, true)) {
-      return new WP_REST_Response(['error' => 'Invalid gender selection.'], 400);
     }
     if (empty($payload['post_ids'])) {
       return new WP_REST_Response(['error' => 'Select at least one study.'], 400);

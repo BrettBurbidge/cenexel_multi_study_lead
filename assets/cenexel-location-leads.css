@@ -1,152 +1,6 @@
-/* Lead form */
-.cenexel-location-landing {
-  max-width: 820px;
-  margin: 0 auto;
-  font-family: "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
-}
+/* ===== CenExel Location Lead Landing ===== */
 
-.cenexel-location-landing h1 {
-  font-size: 2.1rem;
-  margin-bottom: 0.4rem;
-}
-
-.cenexel-location-name {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #1f3ea8;
-  margin-bottom: 1.25rem;
-}
-
-.cenexel-form-card {
-  background: #f5f7fb;
-  border-radius: 14px;
-  border: 1px solid #dfe7f3;
-  padding: 1.5rem;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.35rem 1.25rem;
-  margin-bottom: 2rem;
-}
-
-.cenexel-field {
-  display: flex;
-  flex-direction: column;
-}
-
-.cenexel-form-card .cenexel-checkbox {
-  grid-column: 1 / -1;
-}
-
-.cenexel-field label {
-  font-weight: 700;
-  color: #5b5b5b;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-bottom: 0.4rem;
-}
-
-.cenexel-field label span[aria-hidden="true"] {
-  color: #d04c2a;
-}
-
-.cenexel-field input,
-.cenexel-field select {
-  width: 100%;
-  border-radius: 9px;
-  border: 2px solid #00a0e3;
-  background: #fff;
-  padding: 0.9rem 1rem;
-  font-size: 1rem;
-  color: #1a202c;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.cenexel-field input::placeholder {
-  color: #9fa9bb;
-}
-
-.cenexel-field input:focus,
-.cenexel-field select:focus {
-  outline: none;
-  border-color: #0081c8;
-  box-shadow: 0 0 0 3px rgba(0, 129, 200, 0.15);
-}
-
-.cenexel-field select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='14' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%230081c8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: calc(100% - 14px) center;
-  background-size: 14px;
-  padding-right: 2.5rem;
-}
-
-.cenexel-checkbox {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  font-size: 0.95rem;
-  color: #4a4a4a;
-}
-
-.cenexel-checkbox span {
-  line-height: 1.4;
-}
-
-.cenexel-checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin-top: 0.2rem;
-  flex-shrink: 0;
-}
-
-.cenexel-checkbox a {
-  color: #6c2db5;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.cenexel-checkbox a:hover,
-.cenexel-checkbox a:focus {
-  text-decoration: underline;
-}
-
-#cenexel-lead-form button {
-  background: #0073e6;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 0.95rem 1.75rem;
-  font-size: 1.05rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
-}
-
-#cenexel-lead-form button:hover,
-#cenexel-lead-form button:focus {
-  background: #005dc1;
-  box-shadow: 0 8px 18px rgba(0, 92, 193, 0.25);
-}
-
-#cenexel-status {
-  margin-top: 0.75rem;
-  font-size: 0.95rem;
-  color: #1a202c;
-}
-
-.cenexel-location-landing h2 {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #00a3ff;
-  margin-top: 1.75rem;
-  margin-bottom: 0.5rem;
-}
-
-/* Studies list */
+/* Study list styling */
 .cenexel-studies {
   margin-top: 1.25rem;
   margin-bottom: 1.5rem;
@@ -159,10 +13,6 @@
   gap: 1rem;
   padding: 1.25rem 0;
   border-bottom: 1px solid rgba(15, 23, 42, 0.12);
-}
-
-.cenexel-study-row:last-child {
-  border-bottom: none;
 }
 
 .cenexel-study-left {
@@ -199,13 +49,143 @@
 
 .cenexel-study-subtitle {
   margin-top: 0.35rem;
-  color: rgba(15, 23, 42, 0.7);
+  color: rgba(15, 23, 42, 0.70);
   font-size: 0.95rem;
   line-height: 1.35;
 }
 
-@media (min-width: 680px) {
-  .cenexel-form-card {
-    padding: 2rem;
+.cenexel-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* ===== Location hero (Option B) ===== */
+
+.cenexel-location-hero {
+  margin: 0 0 2rem;
+  padding: 4rem 0;
+  background-color: #f3f6fb;
+  background-image: url("https://cenexelclinicaltrials.com/wp-content/uploads/2023/09/loc-detail-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.cenexel-location-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  display: grid;
+  grid-template-columns: minmax(280px, 560px) 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+.cenexel-location-hero-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+  background: #fff;
+}
+
+.cenexel-location-hero-title {
+  margin: 0 0 0.75rem;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #1f3ea8;
+}
+
+.cenexel-location-hero-address {
+  font-size: 1.75rem;
+  color: rgba(15, 23, 42, 0.65);
+  margin-bottom: 0.85rem;
+}
+
+.cenexel-location-hero-phone {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1.2rem;
+}
+
+.cenexel-location-hero-phone-label {
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.70);
+}
+
+.cenexel-location-hero-phone a {
+  color: rgba(15, 23, 42, 0.85);
+  text-decoration: none;
+}
+
+.cenexel-location-hero-phone a:hover,
+.cenexel-location-hero-phone a:focus {
+  text-decoration: underline;
+}
+
+.cenexel-available-studies-title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 1rem;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 1024px) {
+  .cenexel-location-hero {
+    padding: 3rem 0;
+  }
+
+  .cenexel-location-hero-title {
+    font-size: 2.4rem;
+  }
+
+  .cenexel-location-hero-address {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .cenexel-location-hero {
+    padding: 2.5rem 0;
+  }
+
+  .cenexel-location-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .cenexel-location-hero-image {
+    order: 1;
+  }
+
+  .cenexel-location-hero-text {
+    order: 2;
+  }
+
+  .cenexel-location-hero-title {
+    font-size: 2rem;
+  }
+
+  .cenexel-location-hero-address {
+    font-size: 1.15rem;
+  }
+
+  .cenexel-location-hero-phone {
+    font-size: 1.05rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .cenexel-location-hero {
+    padding: 2rem 0;
+  }
+
+  .cenexel-location-hero-title {
+    font-size: 1.75rem;
   }
 }
