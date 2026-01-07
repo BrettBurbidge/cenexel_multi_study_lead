@@ -46,18 +46,41 @@ AND (
 ORDER BY meta_key;
 ```
 
-### Option 3: Adding Temporary Debug Code
+### Option 3: Enable Plugin Debug Mode (Recommended)
 
-Add this temporarily to `render_location_hero()` function to see what's being found:
+The plugin includes built-in debug logging. To enable it, add this to your `wp-config.php`:
 
 ```php
-// Temporary debug - remove after finding the field
-error_log('Term ID: ' . $term_id);
-error_log('Image URL: ' . $image_url);
-error_log('Term meta keys: ' . print_r(get_term_meta($term_id), true));
+define('CENEXEL_LOCATION_LEADS_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+define('WP_DEBUG_DISPLAY', false); // Don't show errors on frontend
 ```
 
-Then check your WordPress debug.log file.
+Then visit a location page (e.g., `/studies?site=anaheim-ca`). The plugin will automatically log:
+
+- All term meta keys and values for the location
+- Which fields are being checked
+- Which field successfully found an image (if any)
+- All numeric values that might be attachment IDs
+
+Check `/wp-content/debug.log` for output like:
+
+```
+=== CenExel Location Image Debug ===
+Term ID: 123
+Term Name: CenExel Anaheim, CA
+Term Slug: anaheim-ca
+Total meta fields: 45
+
+  _address = 2441 W La Palma, #140
+  _phone = 714-774-7777
+  zip = 92801
+  [meta_key] = [meta_value] ⭐  <- Potential image field
+    ✓ This appears to be an attachment ID! URL: ...
+====================================
+```
+
+This is the easiest way to see all available fields without modifying code.
 
 ### Option 4: Using a Plugin
 

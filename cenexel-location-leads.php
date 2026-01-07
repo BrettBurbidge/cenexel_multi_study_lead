@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.9.1
+ * Version: 0.9.5
  */
 
 if (!defined('ABSPATH')) exit;
@@ -216,27 +216,100 @@ class Cenexel_Location_Leads {
   }
 
   private function resolve_term_image_url(int $term_id): string {
-    // Expanded list of common meta keys for location images
+    // Expanded list with JetEngine and other common meta keys
     $candidates = [
+      // JetEngine specific (since you have JetEngine installed)
+      'jet_thumbnail',
+      'jet_term_thumbnail',
+      'jet_thumbnail_id',
+      'jet_image',
+      'jet_term_image',
+      'jet_term_thumbnail_id',
+      '_jet_thumbnail_id',
+      '_jet_image',
+      'jet_location_image',
+      'jet_location_thumbnail',
+      
+      // Location/image specific
       'location_image',
       'location_photo',
       'building_image',
       'site_image',
       'facility_image',
+      'location_building_image',
+      'header_image',
+      'banner_image',
+      'hero_image',
+      
+      // Common WordPress/ACF
       'image',
       'photo',
       'thumbnail_id',
       'term_image',
       'featured_image',
-      'jet_term_image',
-      'wpcf-location-image',
-      'acf_location_image',
-      'location_thumbnail',
       '_thumbnail_id',
+      'term_thumbnail',
+      'term_thumbnail_id',
+      
+      // Toolset/Types
+      'wpcf-location-image',
+      'wpcf-image',
+      'wpcf-featured-image',
+      
+      // ACF variations
+      'acf_location_image',
+      'acf_image',
+      'field_location_image',
+      
+      // Meta Box
+      'mb_location_image',
+      'mb_image',
+      
+      // Custom variations
+      'location_thumbnail',
+      'location_featured_image',
+      
+      // Check all fields that might contain images (based on your actual meta keys)
+      '_location_image',
+      '_image',
+      '_photo',
+      '_thumbnail',
     ];
 
     $raw = $this->get_term_meta_first_nonempty($term_id, $candidates);
-    if ($raw === '') return '';
+    
+    if ($raw === '') {
+      // Last resort: Query all numeric meta values that might be attachment IDs
+      // Exclude known non-image fields like zip codes
+      global $wpdb;
+      $exclude_keys = ['zip', '_zip', 'phone', '_phone']; // Known non-image numeric fields
+      $placeholders = implode(',', array_fill(0, count($exclude_keys), '%s'));
+      
+      $numeric_meta = $wpdb->get_results($wpdb->prepare(
+        "SELECT tm.meta_key, tm.meta_value 
+         FROM {$wpdb->termmeta} tm
+         WHERE tm.term_id = %d 
+         AND tm.meta_value REGEXP '^[0-9]+$'
+         AND CAST(tm.meta_value AS UNSIGNED) > 10
+         AND tm.meta_key NOT IN ($placeholders)
+         ORDER BY CAST(tm.meta_value AS UNSIGNED) DESC
+         LIMIT 10",
+        array_merge([$term_id], $exclude_keys)
+      ));
+      
+      foreach ($numeric_meta as $meta) {
+        $attachment_id = (int)$meta->meta_value;
+        // Skip if it looks like a zip code or phone number
+        if ($attachment_id < 100) continue;
+        
+        $url = wp_get_attachment_image_url($attachment_id, 'large');
+        if ($url) {
+          return esc_url_raw($url);
+        }
+      }
+      
+      return '';
+    }
 
     if (filter_var($raw, FILTER_VALIDATE_URL)) {
       return esc_url_raw($raw);
@@ -259,22 +332,46 @@ class Cenexel_Location_Leads {
     $thumbnail_id = get_post_thumbnail_id($post_id);
     if ($thumbnail_id) {
       $url = wp_get_attachment_image_url($thumbnail_id, 'large');
-      if ($url) return esc_url_raw($url);
+      if ($url) {
+        return esc_url_raw($url);
+      }
     }
 
-    // Then try meta fields (same candidates as term meta)
+    // Then try meta fields (expanded candidates)
     $candidates = [
+      // JetEngine
+      'jet_thumbnail',
+      'jet_thumbnail_id',
+      'jet_image',
+      '_jet_thumbnail_id',
+      '_jet_image',
+      
+      // Location/image specific
       'location_image',
       'location_photo',
       'building_image',
       'site_image',
       'facility_image',
+      'location_building_image',
+      'header_image',
+      'banner_image',
+      'hero_image',
+      
+      // Common
       'image',
       'photo',
       'thumbnail_id',
       '_thumbnail_id',
+      
+      // Toolset/ACF
       'wpcf-location-image',
       'acf_location_image',
+      'field_location_image',
+      
+      // Custom variations
+      '_location_image',
+      '_image',
+      '_photo',
     ];
 
     $raw = $this->get_post_meta_first_nonempty($post_id, $candidates);
@@ -286,7 +383,9 @@ class Cenexel_Location_Leads {
 
     if (ctype_digit($raw)) {
       $url = wp_get_attachment_image_url((int)$raw, 'large');
-      if ($url) return esc_url_raw($url);
+      if ($url) {
+        return esc_url_raw($url);
+      }
       $url = wp_get_attachment_image_url((int)$raw, 'full');
       return $url ? esc_url_raw($url) : '';
     }
@@ -299,6 +398,83 @@ class Cenexel_Location_Leads {
     $parts = array_filter([$address, $city, $state, $zip]);
     $query = urlencode(implode(', ', $parts));
     return "https://www.google.com/maps/search/?api=1&query={$query}";
+  }
+
+  /**
+   * Find a related location post that matches the taxonomy term
+   * This handles the case where locations exist as both taxonomy terms AND custom posts
+   */
+  private function find_related_location_post($term): ?WP_Post {
+    if (!$term || is_wp_error($term)) return null;
+    
+    $term_name = $term->name;
+    $term_slug = $term->slug;
+    
+    global $wpdb;
+    
+    // First try exact title match
+    $post = $wpdb->get_row($wpdb->prepare(
+      "SELECT * FROM {$wpdb->posts} 
+       WHERE post_type = 'location' 
+       AND post_status = 'publish' 
+       AND post_title = %s
+       LIMIT 1",
+      $term_name
+    ));
+    
+    if ($post) {
+      return new WP_Post($post);
+    }
+    
+    // Try partial match (term name contains city name, post title contains same)
+    $post = $wpdb->get_row($wpdb->prepare(
+      "SELECT * FROM {$wpdb->posts} 
+       WHERE post_type = 'location' 
+       AND post_status = 'publish' 
+       AND (post_title LIKE %s OR post_name = %s)
+       LIMIT 1",
+      '%' . $wpdb->esc_like($term_name) . '%',
+      $term_slug
+    ));
+    
+    if ($post) {
+      return new WP_Post($post);
+    }
+    
+    // Try matching by slug variations
+    $slug_variations = [
+      $term_slug,
+      str_replace('-', '_', $term_slug),
+      'cenexel-' . $term_slug,
+      str_replace('cenexel-', '', $term_slug),
+    ];
+    
+    foreach ($slug_variations as $slug) {
+      $post = get_page_by_path($slug, OBJECT, 'location');
+      if ($post) {
+        return $post;
+      }
+    }
+    
+    // Try extracting city name and searching
+    $city_match = [];
+    if (preg_match('/CenExel\s+([^,]+)/i', $term_name, $city_match)) {
+      $city = trim($city_match[1]);
+      $post = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->posts} 
+         WHERE post_type = 'location' 
+         AND post_status = 'publish' 
+         AND post_title LIKE %s
+         LIMIT 1",
+        '%' . $wpdb->esc_like($city) . '%'
+      ));
+      
+      if ($post) {
+        return new WP_Post($post);
+      }
+    }
+    
+    return null;
   }
 
   private function render_location_hero($term): string {
@@ -335,7 +511,16 @@ class Cenexel_Location_Leads {
       'telephone',
     ]);
 
+    // First try to get image from term meta
     $image_url = $this->resolve_term_image_url($term_id);
+    
+    // If no image in term meta, try to find a related location post with featured image
+    if (empty($image_url)) {
+      $related_post = $this->find_related_location_post($term);
+      if ($related_post) {
+        $image_url = $this->resolve_post_image_url($related_post->ID);
+      }
+    }
 
     // Format title: "CenExel [Location], [State]" to match screenshot format
     $location_name = trim($term->name);
@@ -609,6 +794,7 @@ class Cenexel_Location_Leads {
         }
         ?>
 
+        <div class="cenexel-content-wrapper">
         <!-- Step 1: Study Selection -->
         <div id="cenexel-step-studies" class="cenexel-step">
           <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
@@ -736,6 +922,7 @@ class Cenexel_Location_Leads {
             </p>
           </div>
         </div>
+        </div><!-- .cenexel-content-wrapper -->
       </div>
     <?php
     return ob_get_clean();
