@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.9.5
+ * Version: 0.9.24
  */
 
 if (!defined('ABSPATH')) exit;
@@ -213,6 +213,121 @@ class Cenexel_Location_Leads {
       }
     }
     return '';
+  }
+
+  private function normalize_study_gender(string $raw): array {
+    $v_original = trim($raw);
+    if ($v_original === '') return ['key' => 'unknown', 'label' => '—'];
+    
+    $v = strtolower($v_original);
+    
+    // Check for "all" cases first
+    if (in_array($v, ['all', 'any', 'both', 'either', 'everyone', 'anyone'], true)) {
+      return ['key' => 'all', 'label' => 'All'];
+    }
+    
+    // Check if it contains both "male" and "female" (handles "Male, Female", "Male and Female", etc.)
+    $has_male = str_contains($v, 'male') || $v === 'm' || str_contains($v, 'man') || str_contains($v, 'men');
+    $has_female = str_contains($v, 'female') || $v === 'f' || str_contains($v, 'woman') || str_contains($v, 'women');
+    
+    if ($has_male && $has_female) {
+      return ['key' => 'all', 'label' => 'All'];
+    }
+    
+    // Single gender
+    if ($has_female) {
+      return ['key' => 'female', 'label' => 'Female'];
+    }
+    if ($has_male) {
+      return ['key' => 'male', 'label' => 'Male'];
+    }
+
+    // Unknown format, return original
+    return ['key' => 'unknown', 'label' => $v_original];
+  }
+
+  private function parse_study_age(int $post_id): array {
+    $age_range = $this->get_post_meta_first_nonempty($post_id, [
+      'age_range',
+      'ages',
+      'age',
+      'eligibility_age',
+      'eligibility_age_range',
+      'participant_age_range',
+      'eligibility_criteria_age',
+    ]);
+
+    $min_raw = $this->get_post_meta_first_nonempty($post_id, [
+      'age_range_low',
+      'age_low_ta',
+      'min_age',
+      'minimum_age',
+      'age_min',
+      'eligibility_min_age',
+      'eligibility_age_min',
+      'participant_min_age',
+    ]);
+    $max_raw = $this->get_post_meta_first_nonempty($post_id, [
+      'age_range_high',
+      'age_high_ta',
+      'max_age',
+      'maximum_age',
+      'age_max',
+      'eligibility_max_age',
+      'eligibility_age_max',
+      'participant_max_age',
+    ]);
+
+    $min = is_numeric($min_raw) ? (int)$min_raw : null;
+    $max = is_numeric($max_raw) ? (int)$max_raw : null;
+
+    $label = '—';
+    if ($age_range !== '') {
+      $label = $age_range;
+    } elseif ($min !== null || $max !== null) {
+      if ($min !== null && $max !== null) {
+        // Show range without "Ages" prefix: "18–65"
+        $label = "{$min}–{$max}";
+      } elseif ($min !== null) {
+        // Only min age, no max - show as "18+"
+        $label = "{$min}+";
+      } else {
+        $label = "Up to {$max}";
+      }
+    }
+
+    $buckets = [];
+    // Bucket heuristics; if unknown, leave empty (will only show when no age filter selected)
+    if ($min !== null || $max !== null) {
+      $lo = $min ?? 0;
+      $hi = $max ?? 200;
+      if ($lo <= 17) $buckets[] = 'child';
+      if ($hi >= 18 && $lo <= 64) $buckets[] = 'adult';
+      if ($hi >= 65) $buckets[] = 'older';
+    }
+
+    return ['label' => $label, 'buckets' => $buckets, 'min' => $min, 'max' => $max];
+  }
+
+  private function parse_study_compensation(int $post_id): array {
+    $raw = $this->get_post_meta_first_nonempty($post_id, [
+      'compensation_up_to_x',
+      'compensation_ta',
+      'compensation',
+      'study_compensation',
+      'participant_compensation',
+      'compensation_amount',
+      'compensation_text',
+      'stipend',
+      'payment',
+      'reimbursement',
+      'pay',
+    ]);
+
+    $label = $raw !== '' ? $raw : '—';
+    $has = ($raw !== '' && !in_array(strtolower(trim($raw)), ['0', 'none', 'n/a', 'na', 'no'], true)) ? '1' : '0';
+
+    return ['label' => $label, 'has' => $has];
   }
 
   private function resolve_term_image_url(int $term_id): string {
@@ -513,7 +628,7 @@ class Cenexel_Location_Leads {
 
     // First try to get image from term meta
     $image_url = $this->resolve_term_image_url($term_id);
-    
+
     // If no image in term meta, try to find a related location post with featured image
     if (empty($image_url)) {
       $related_post = $this->find_related_location_post($term);
@@ -548,12 +663,8 @@ class Cenexel_Location_Leads {
     
     $formatted_title = esc_html($formatted_title);
 
-    // Build address line for display
-    $address_parts = array_filter([$address, $city, $state]);
-    $address_line = trim(implode(', ', $address_parts));
-    if ($zip) {
-      $address_line .= ($address_line ? ', ' : '') . $zip;
-    }
+    // Build complete address line (street, city, state, zip all on one line)
+    $address_line = trim(implode(', ', array_filter([$address, $city, $state, $zip])));
 
     // Build Google Maps URL
     $google_maps_url = '';
@@ -562,38 +673,69 @@ class Cenexel_Location_Leads {
     }
 
     ob_start(); ?>
-      <section class="cenexel-location-hero">
-        <div class="cenexel-location-hero-inner">
+      <section class="cenexel-location-hero elementor-section elementor-top-section elementor-section-boxed elementor-section-height-default elementor-section-height-default">
+        <div class="cenexel-location-hero-overlay elementor-background-overlay"></div>
+        <div class="cenexel-location-hero-container elementor-container elementor-column-gap-default">
+          
           <?php if ($image_url): ?>
-            <div class="cenexel-location-hero-image">
-              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" />
+          <div class="cenexel-location-hero-col-left elementor-column elementor-col-50 elementor-top-column">
+            <div class="elementor-widget-wrap elementor-element-populated">
+              <div class="cenexel-location-hero-image elementor-element elementor-widget elementor-widget-image">
+                <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" class="attachment-full size-full" style="visibility: visible;" />
+              </div>
+            </div>
             </div>
           <?php endif; ?>
 
-          <div class="cenexel-location-hero-text">
-            <h1 class="cenexel-location-hero-title"><?php echo esc_html($formatted_title); ?></h1>
+          <div class="cenexel-location-hero-col-right elementor-column elementor-col-50 elementor-top-column">
+            <div class="elementor-widget-wrap elementor-element-populated">
+              <section class="cenexel-location-hero-inner elementor-section elementor-inner-section elementor-section-content-middle elementor-section-boxed elementor-section-height-default elementor-section-height-default">
+                <div class="elementor-container elementor-column-gap-default">
+                  <div class="elementor-column elementor-col-100 elementor-inner-column">
+                    <div class="elementor-widget-wrap elementor-element-populated">
+                      
+                      <div class="elementor-element elementor-widget elementor-widget-heading">
+                        <h1 class="cenexel-location-hero-title elementor-heading-title elementor-size-default"><?php echo esc_html($formatted_title); ?></h1>
+                      </div>
 
             <?php if ($address_line): ?>
-              <div class="cenexel-location-hero-address">
-                <?php if ($google_maps_url): ?>
-                  <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link">
-                    <?php echo esc_html($address_line); ?>
-                  </a>
-                <?php else: ?>
-                  <?php echo esc_html($address_line); ?>
-                <?php endif; ?>
-              </div>
+                      <div class="elementor-element elementor-icon-list--layout-inline elementor-mobile-align-center elementor-list-item-link-full_width elementor-widget elementor-widget-icon-list cenexel-location-hero-address">
+                        <ul class="elementor-icon-list-items elementor-inline-items">
+                          <li class="elementor-icon-list-item elementor-inline-item">
+                            <span class="elementor-icon-list-text">
+                              <?php if ($google_maps_url): ?>
+                                <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link"><?php echo esc_html($address_line); ?></a>
+                              <?php else: ?>
+                                <?php echo esc_html($address_line); ?>
+                              <?php endif; ?>
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
             <?php endif; ?>
 
             <?php if ($phone): ?>
-              <div class="cenexel-location-hero-phone">
-                <span class="cenexel-location-hero-phone-label">Phone</span>
-                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link">
-                  <?php echo esc_html($phone); ?>
-                </a>
+                      <div class="elementor-element elementor-icon-list--layout-inline elementor-mobile-align-center elementor-list-item-link-full_width elementor-widget elementor-widget-icon-list cenexel-location-hero-phone">
+                        <ul class="elementor-icon-list-items elementor-inline-items">
+                          <li class="elementor-icon-list-item elementor-inline-item">
+                            <span class="elementor-icon-list-icon">
+                              <svg aria-hidden="true" class="e-font-icon-svg e-fas-phone-alt" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M497.39 361.8l-112-48a24 24 0 0 0-28 6.9l-49.6 60.6A370.66 370.66 0 0 1 130.6 204.11l60.6-49.6a23.94 23.94 0 0 0 6.9-28l-48-112A24.16 24.16 0 0 0 122.6.61l-104 24A24 24 0 0 0 0 48c0 256.5 207.9 464 464 464a24 24 0 0 0 23.4-18.6l24-104a24.29 24.29 0 0 0-14.01-27.6z"></path></svg>
+                            </span>
+                            <span class="elementor-icon-list-text">
+                              <strong>Phone</strong>&nbsp;<a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
+                            </span>
+                          </li>
+                        </ul>
               </div>
             <?php endif; ?>
+
+                    </div>
           </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
         </div>
       </section>
     <?php
@@ -660,12 +802,8 @@ class Cenexel_Location_Leads {
     
     $formatted_title = esc_html($formatted_title);
 
-    // Build address line for display
-    $address_parts = array_filter([$address, $city, $state]);
-    $address_line = trim(implode(', ', $address_parts));
-    if ($zip) {
-      $address_line .= ($address_line ? ', ' : '') . $zip;
-    }
+    // Build complete address line (street, city, state, zip all on one line)
+    $address_line = trim(implode(', ', array_filter([$address, $city, $state, $zip])));
 
     // Build Google Maps URL
     $google_maps_url = '';
@@ -674,38 +812,69 @@ class Cenexel_Location_Leads {
     }
 
     ob_start(); ?>
-      <section class="cenexel-location-hero">
-        <div class="cenexel-location-hero-inner">
+      <section class="cenexel-location-hero elementor-section elementor-top-section elementor-section-boxed elementor-section-height-default elementor-section-height-default">
+        <div class="cenexel-location-hero-overlay elementor-background-overlay"></div>
+        <div class="cenexel-location-hero-container elementor-container elementor-column-gap-default">
+          
           <?php if ($image_url): ?>
-            <div class="cenexel-location-hero-image">
-              <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" />
+          <div class="cenexel-location-hero-col-left elementor-column elementor-col-50 elementor-top-column">
+            <div class="elementor-widget-wrap elementor-element-populated">
+              <div class="cenexel-location-hero-image elementor-element elementor-widget elementor-widget-image">
+                <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($formatted_title); ?>" class="attachment-full size-full" style="visibility: visible;" />
+              </div>
             </div>
+          </div>
           <?php endif; ?>
 
-          <div class="cenexel-location-hero-text">
-            <h1 class="cenexel-location-hero-title"><?php echo esc_html($formatted_title); ?></h1>
+          <div class="cenexel-location-hero-col-right elementor-column elementor-col-50 elementor-top-column">
+            <div class="elementor-widget-wrap elementor-element-populated">
+              <section class="cenexel-location-hero-inner elementor-section elementor-inner-section elementor-section-content-middle elementor-section-boxed elementor-section-height-default elementor-section-height-default">
+                <div class="elementor-container elementor-column-gap-default">
+                  <div class="elementor-column elementor-col-100 elementor-inner-column">
+                    <div class="elementor-widget-wrap elementor-element-populated">
+                      
+                      <div class="elementor-element elementor-widget elementor-widget-heading">
+                        <h1 class="cenexel-location-hero-title elementor-heading-title elementor-size-default"><?php echo esc_html($formatted_title); ?></h1>
+                      </div>
 
-            <?php if ($address_line): ?>
-              <div class="cenexel-location-hero-address">
-                <?php if ($google_maps_url): ?>
-                  <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link">
-                    <?php echo esc_html($address_line); ?>
-                  </a>
-                <?php else: ?>
-                  <?php echo esc_html($address_line); ?>
-                <?php endif; ?>
-              </div>
-            <?php endif; ?>
+                      <?php if ($address_line): ?>
+                      <div class="elementor-element elementor-icon-list--layout-inline elementor-mobile-align-center elementor-list-item-link-full_width elementor-widget elementor-widget-icon-list cenexel-location-hero-address">
+                        <ul class="elementor-icon-list-items elementor-inline-items">
+                          <li class="elementor-icon-list-item elementor-inline-item">
+                            <span class="elementor-icon-list-text">
+                              <?php if ($google_maps_url): ?>
+                                <a href="<?php echo esc_url($google_maps_url); ?>" target="_blank" rel="noopener noreferrer" class="cenexel-location-hero-address-link"><?php echo esc_html($address_line); ?></a>
+                              <?php else: ?>
+                                <?php echo esc_html($address_line); ?>
+                              <?php endif; ?>
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                      <?php endif; ?>
 
-            <?php if ($phone): ?>
-              <div class="cenexel-location-hero-phone">
-                <span class="cenexel-location-hero-phone-label">Phone</span>
-                <a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link">
-                  <?php echo esc_html($phone); ?>
-                </a>
-              </div>
-            <?php endif; ?>
+                      <?php if ($phone): ?>
+                      <div class="elementor-element elementor-icon-list--layout-inline elementor-mobile-align-center elementor-list-item-link-full_width elementor-widget elementor-widget-icon-list cenexel-location-hero-phone">
+                        <ul class="elementor-icon-list-items elementor-inline-items">
+                          <li class="elementor-icon-list-item elementor-inline-item">
+                            <span class="elementor-icon-list-icon">
+                              <svg aria-hidden="true" class="e-font-icon-svg e-fas-phone-alt" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M497.39 361.8l-112-48a24 24 0 0 0-28 6.9l-49.6 60.6A370.66 370.66 0 0 1 130.6 204.11l60.6-49.6a23.94 23.94 0 0 0 6.9-28l-48-112A24.16 24.16 0 0 0 122.6.61l-104 24A24 24 0 0 0 0 48c0 256.5 207.9 464 464 464a24 24 0 0 0 23.4-18.6l24-104a24.29 24.29 0 0 0-14.01-27.6z"></path></svg>
+                            </span>
+                            <span class="elementor-icon-list-text">
+                              <strong>Phone</strong>&nbsp;<a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                      <?php endif; ?>
+
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
+
         </div>
       </section>
     <?php
@@ -797,8 +966,64 @@ class Cenexel_Location_Leads {
         <div class="cenexel-content-wrapper">
         <!-- Step 1: Study Selection -->
         <div id="cenexel-step-studies" class="cenexel-step">
-          <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
+        <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
           <p class="cenexel-step-instructions">Please select the studies you're interested in:</p>
+
+          <div class="cenexel-study-filters-wrapper">
+            <button type="button" class="cenexel-study-filters-toggle" aria-expanded="false" aria-controls="cenexel-study-filters">
+              <span class="cenexel-study-filters-toggle-text">Show Filters</span>
+              <span class="cenexel-study-filters-toggle-icon">▼</span>
+            </button>
+            
+            <div class="cenexel-study-filters" id="cenexel-study-filters" aria-label="Eligibility Criteria Filters" style="display: none;">
+              <div class="cenexel-study-filters-title">Eligibility Criteria</div>
+
+              <div class="cenexel-filter-group">
+              <div class="cenexel-filter-group-title">Sex</div>
+              <label class="cenexel-radio">
+                <input type="radio" name="cenexel_filter_sex" value="all" checked />
+                <span>All</span>
+              </label>
+              <label class="cenexel-radio">
+                <input type="radio" name="cenexel_filter_sex" value="female" />
+                <span>Female</span>
+              </label>
+              <label class="cenexel-radio">
+                <input type="radio" name="cenexel_filter_sex" value="male" />
+                <span>Male</span>
+            </label>
+          </div>
+
+            <div class="cenexel-filter-group">
+              <div class="cenexel-filter-group-title">Age</div>
+              <label class="cenexel-checkbox-inline">
+                <input type="checkbox" name="cenexel_filter_age" value="child" />
+                <span>Child (birth - 17)</span>
+              </label>
+              <label class="cenexel-checkbox-inline">
+                <input type="checkbox" name="cenexel_filter_age" value="adult" />
+                <span>Adult (18 - 64)</span>
+              </label>
+              <label class="cenexel-checkbox-inline">
+                <input type="checkbox" name="cenexel_filter_age" value="older" />
+                <span>Older adult (65+)</span>
+              </label>
+            </div>
+
+            <div class="cenexel-filter-group">
+              <div class="cenexel-filter-group-title">Compensation</div>
+              <select id="cenexel-filter-comp" class="cenexel-filter-select">
+                <option value="any">Any</option>
+                <option value="paid">Compensation available</option>
+                <option value="unspecified">Unspecified</option>
+              </select>
+            </div>
+
+              <div class="cenexel-filter-actions">
+                <button type="button" id="cenexel-clear-filters" class="cenexel-filter-clear">Clear filters</button>
+              </div>
+            </div>
+          </div>
 
           <div class="cenexel-studies">
             <?php if (empty($posts)): ?>
@@ -810,12 +1035,37 @@ class Cenexel_Location_Leads {
                 $study_title = trim((string)get_post_meta($post_id, self::META_STUDY_TITLE, true));
                 if ($study_title === '') $study_title = get_the_title($p);
 
-                $subtitle = trim((string)get_post_meta($post_id, self::META_SUBTITLE, true));
+                // Get gender - using actual field names
+                $gender_raw = $this->get_post_meta_first_nonempty($post_id, [
+                  'select_gender',
+                  'gender_ta',
+                  'sex',
+                  'gender',
+                  'study_gender',
+                  'eligibility_sex',
+                  'eligibility_gender',
+                  'participant_gender',
+                ]);
+                
+                $gender = $this->normalize_study_gender($gender_raw);
+                $age = $this->parse_study_age($post_id);
+                $comp = $this->parse_study_compensation($post_id);
+                // Get status - check actual field name first, then fallback
+                $status = trim((string)$this->get_post_meta_first_nonempty($post_id, [
+                  'study_status',
+                  'status_ta',
+                  'status',
+                ]));
 
                 $permalink = get_permalink($p);
                 $checkbox_id = 'cenexel-study-' . $post_id;
               ?>
-                <div class="cenexel-study-row">
+                <div
+                  class="cenexel-study-row"
+                  data-gender="<?php echo esc_attr($gender['key']); ?>"
+                  data-age-buckets="<?php echo esc_attr(implode(',', $age['buckets'])); ?>"
+                  data-has-comp="<?php echo esc_attr($comp['has']); ?>"
+                >
                   <div class="cenexel-study-left">
                     <input
                       class="cenexel-study-checkbox"
@@ -827,13 +1077,18 @@ class Cenexel_Location_Leads {
                     <div class="cenexel-study-text">
                       <a class="cenexel-study-title" href="<?php echo esc_url($permalink); ?>" target="_blank" rel="noopener noreferrer">
                         <?php echo esc_html($study_title); ?>
+                        <?php if ($status !== ''): ?>
+                          <span class="cenexel-study-status"> (<?php echo esc_html($status); ?>)</span>
+                        <?php endif; ?>
                       </a>
 
-                      <?php if ($subtitle !== ''): ?>
-                        <div class="cenexel-study-subtitle">
-                          <?php echo esc_html($subtitle); ?>
-                        </div>
-                      <?php endif; ?>
+                      <div class="cenexel-study-meta">
+                        <div class="cenexel-study-meta-item"><strong>Gender</strong> <span><?php echo esc_html($gender['label']); ?></span></div>
+                        <div class="cenexel-study-meta-item"><strong>Age</strong> <span><?php echo esc_html($age['label']); ?></span></div>
+                        <?php if ($comp['has'] === '1'): ?>
+                          <div class="cenexel-study-meta-item"><strong>Compensation</strong> <span><?php echo esc_html($comp['label']); ?></span></div>
+                        <?php endif; ?>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -851,6 +1106,9 @@ class Cenexel_Location_Leads {
 
         <!-- Step 2: Form -->
         <div id="cenexel-step-form" class="cenexel-step" style="display: none;">
+          <button type="button" id="cenexel-back-to-studies-from-form" class="cenexel-back-button" style="margin-bottom: 1rem;">
+            ← Back to Studies
+          </button>
           <h2 class="cenexel-form-title">Your Information</h2>
           <p class="cenexel-step-instructions">Please fill out the form below to continue:</p>
 
@@ -909,8 +1167,8 @@ class Cenexel_Location_Leads {
             </div>
 
             <button type="submit" class="cenexel-submit-button">Submit</button>
-            <div id="cenexel-status" aria-live="polite"></div>
-          </form>
+          <div id="cenexel-status" aria-live="polite"></div>
+        </form>
         </div>
 
         <!-- Step 3: Thank You -->
@@ -920,6 +1178,7 @@ class Cenexel_Location_Leads {
             <p class="cenexel-thank-you-message">
               We have received your information and will contact you shortly about the clinical trial studies you're interested in.
             </p>
+            <button type="button" id="cenexel-back-to-studies-btn" class="cenexel-back-button">Back to Studies</button>
           </div>
         </div>
         </div><!-- .cenexel-content-wrapper -->

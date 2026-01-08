@@ -5,6 +5,12 @@
 
 set -e  # Exit on error
 
+# Cursor injects an invalid GITHUB_TOKEN - remove it to use gh keyring auth
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    echo "⚠️  Unsetting invalid GITHUB_TOKEN from environment..."
+    unset GITHUB_TOKEN
+fi
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -153,8 +159,13 @@ if command -v jq &> /dev/null; then
 fi
 
 # Optionally publish to GitHub
-if [ -n "$GITHUB_TOKEN" ] && command -v gh &> /dev/null; then
-    echo ""
+echo ""
+if ! command -v gh &> /dev/null; then
+    echo -e "${YELLOW}GitHub CLI (gh) not found. Install it to publish releases automatically.${NC}"
+    echo "Visit: https://cli.github.com/"
+elif ! gh auth status 2>&1 | grep -q "Logged in"; then
+    echo -e "${YELLOW}GitHub CLI not authenticated. Run 'gh auth login' to enable GitHub publishing.${NC}"
+else
     read -p "Publish to GitHub? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -180,10 +191,6 @@ if [ -n "$GITHUB_TOKEN" ] && command -v gh &> /dev/null; then
             echo -e "${YELLOW}Warning: GitHub release creation failed${NC}"
         fi
     fi
-elif [ -n "$GITHUB_TOKEN" ]; then
-    echo ""
-    echo -e "${YELLOW}GitHub CLI (gh) not found. Install it to publish releases automatically.${NC}"
-    echo "Visit: https://cli.github.com/"
 fi
 
 echo ""

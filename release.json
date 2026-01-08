@@ -1,6 +1,6 @@
 {
-  "version": "0.9.5",
-  "date": "2026-01-07",
+  "version": "0.9.24",
+  "date": "2026-01-08",
   "notes": [
     "Restored form fields (Date of Birth, Gender, Caregiver checkbox)",
     "Updated form styling to match design requirements",
@@ -10,7 +10,13 @@
     "Made address clickable with Google Maps link",
     "Improved title formatting to display 'CenExel [Location], [State]' format",
     "Added clickable phone number links",
-    "Created debug documentation for troubleshooting image fields"
+    "Fixed address display to show on single line with zip code",
+    "Fixed phone field alignment in location hero",
+    "Added 'Back to Studies' button on thank you page",
+    "Added study filters (Sex, Age, Compensation) above studies list",
+    "Replaced study subtitle/description with Gender, Age, Compensation, and Status fields",
+    "Updated meta field mappings to use exact WordPress field names (gender_ta, age_low_ta, age_high_ta, compensation_ta, status_ta)",
+    "Implemented client-side filtering for studies based on eligibility criteria"
   ],
   "author": "CenExel",
   "plugin_slug": "cenexel-location-leads"
