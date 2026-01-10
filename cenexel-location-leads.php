@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CenExel Location Lead Landing
  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.9.24
+ * Version: 0.9.31
  */
 
 if (!defined('ABSPATH')) exit;
@@ -722,7 +722,7 @@ class Cenexel_Location_Leads {
                               <svg aria-hidden="true" class="e-font-icon-svg e-fas-phone-alt" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M497.39 361.8l-112-48a24 24 0 0 0-28 6.9l-49.6 60.6A370.66 370.66 0 0 1 130.6 204.11l60.6-49.6a23.94 23.94 0 0 0 6.9-28l-48-112A24.16 24.16 0 0 0 122.6.61l-104 24A24 24 0 0 0 0 48c0 256.5 207.9 464 464 464a24 24 0 0 0 23.4-18.6l24-104a24.29 24.29 0 0 0-14.01-27.6z"></path></svg>
                             </span>
                             <span class="elementor-icon-list-text">
-                              <strong>Phone</strong>&nbsp;<a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
+                              <strong>Phone</strong><a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
                             </span>
                           </li>
                         </ul>
@@ -861,7 +861,7 @@ class Cenexel_Location_Leads {
                               <svg aria-hidden="true" class="e-font-icon-svg e-fas-phone-alt" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M497.39 361.8l-112-48a24 24 0 0 0-28 6.9l-49.6 60.6A370.66 370.66 0 0 1 130.6 204.11l60.6-49.6a23.94 23.94 0 0 0 6.9-28l-48-112A24.16 24.16 0 0 0 122.6.61l-104 24A24 24 0 0 0 0 48c0 256.5 207.9 464 464 464a24 24 0 0 0 23.4-18.6l24-104a24.29 24.29 0 0 0-14.01-27.6z"></path></svg>
                             </span>
                             <span class="elementor-icon-list-text">
-                              <strong>Phone</strong>&nbsp;<a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
+                              <strong>Phone</strong><a href="tel:<?php echo esc_attr(preg_replace('/[^\d\+]/', '', $phone)); ?>" class="cenexel-location-hero-phone-link"><?php echo esc_html($phone); ?></a>
                             </span>
                           </li>
                         </ul>
@@ -966,7 +966,7 @@ class Cenexel_Location_Leads {
         <div class="cenexel-content-wrapper">
         <!-- Step 1: Study Selection -->
         <div id="cenexel-step-studies" class="cenexel-step">
-        <h2 class="cenexel-available-studies-title">Available Clinical Trial Studies</h2>
+        <h2 class="cenexel-available-studies-title">Available Clinical Trials</h2>
           <p class="cenexel-step-instructions">Please select the studies you're interested in:</p>
 
           <div class="cenexel-study-filters-wrapper">
@@ -1008,15 +1008,6 @@ class Cenexel_Location_Leads {
                 <input type="checkbox" name="cenexel_filter_age" value="older" />
                 <span>Older adult (65+)</span>
               </label>
-            </div>
-
-            <div class="cenexel-filter-group">
-              <div class="cenexel-filter-group-title">Compensation</div>
-              <select id="cenexel-filter-comp" class="cenexel-filter-select">
-                <option value="any">Any</option>
-                <option value="paid">Compensation available</option>
-                <option value="unspecified">Unspecified</option>
-              </select>
             </div>
 
               <div class="cenexel-filter-actions">
@@ -1061,36 +1052,38 @@ class Cenexel_Location_Leads {
                 $checkbox_id = 'cenexel-study-' . $post_id;
               ?>
                 <div
-                  class="cenexel-study-row"
+                  class="cenexel-study-card"
                   data-gender="<?php echo esc_attr($gender['key']); ?>"
                   data-age-buckets="<?php echo esc_attr(implode(',', $age['buckets'])); ?>"
-                  data-has-comp="<?php echo esc_attr($comp['has']); ?>"
+                  data-post-id="<?php echo esc_attr($post_id); ?>"
                 >
-                  <div class="cenexel-study-left">
-                    <input
-                      class="cenexel-study-checkbox"
-                      type="checkbox"
-                      name="post_ids[]"
-                      value="<?php echo esc_attr($post_id); ?>"
-                      id="<?php echo esc_attr($checkbox_id); ?>"
-                    />
-                    <div class="cenexel-study-text">
-                      <a class="cenexel-study-title" href="<?php echo esc_url($permalink); ?>" target="_blank" rel="noopener noreferrer">
-                        <?php echo esc_html($study_title); ?>
-                        <?php if ($status !== ''): ?>
-                          <span class="cenexel-study-status"> (<?php echo esc_html($status); ?>)</span>
-                        <?php endif; ?>
-                      </a>
+                  <input
+                    class="cenexel-study-checkbox"
+                    type="checkbox"
+                    name="post_ids[]"
+                    value="<?php echo esc_attr($post_id); ?>"
+                    id="<?php echo esc_attr($checkbox_id); ?>"
+                  />
+                  <div class="cenexel-study-content">
+                    <a class="cenexel-study-title" href="<?php echo esc_url($permalink); ?>" target="_blank" rel="noopener noreferrer">
+                      <?php echo esc_html($study_title); ?>
+                    </a>
 
-                      <div class="cenexel-study-meta">
-                        <div class="cenexel-study-meta-item"><strong>Gender</strong> <span><?php echo esc_html($gender['label']); ?></span></div>
-                        <div class="cenexel-study-meta-item"><strong>Age</strong> <span><?php echo esc_html($age['label']); ?></span></div>
-                        <?php if ($comp['has'] === '1'): ?>
-                          <div class="cenexel-study-meta-item"><strong>Compensation</strong> <span><?php echo esc_html($comp['label']); ?></span></div>
-                        <?php endif; ?>
-                      </div>
+                    <div class="cenexel-study-meta">
+                      <span class="cenexel-study-meta-item"><strong>Gender</strong> <?php echo esc_html($gender['label']); ?></span>
+                      <span class="cenexel-study-meta-separator">|</span>
+                      <span class="cenexel-study-meta-item"><strong>Age</strong> <?php echo esc_html($age['label']); ?></span>
+                      <?php if ($comp['has'] === '1'): ?>
+                        <span class="cenexel-study-meta-separator">|</span>
+                        <span class="cenexel-study-meta-item"><strong>Compensation</strong> <?php echo esc_html($comp['label']); ?></span>
+                      <?php endif; ?>
                     </div>
                   </div>
+                  <?php if ($status !== ''): ?>
+                    <div class="cenexel-study-status" data-status="<?php echo esc_attr(strtolower($status)); ?>">
+                      <?php echo esc_html($status); ?>
+                    </div>
+                  <?php endif; ?>
                 </div>
               <?php endforeach; ?>
             <?php endif; ?>
@@ -1144,11 +1137,9 @@ class Cenexel_Location_Leads {
               <div class="cenexel-field">
                 <label for="cenexel-gender">Gender <span aria-hidden="true">*</span></label>
                 <select id="cenexel-gender" name="gender" required>
-                  <option value="">Please select</option>
-                  <option value="female">Female</option>
+                  <option value="">Select</option>
                   <option value="male">Male</option>
-                  <option value="non-binary">Non-binary</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
+                  <option value="female">Female</option>
                 </select>
               </div>
               <label class="cenexel-checkbox">

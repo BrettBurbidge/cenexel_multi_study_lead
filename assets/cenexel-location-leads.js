@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const continueBtn = document.getElementById("cenexel-continue-btn");
   const studyError = document.getElementById("cenexel-study-error");
   const studyCheckboxes = document.querySelectorAll(".cenexel-study-checkbox");
-  const studyRows = document.querySelectorAll(".cenexel-study-row");
+  const studyCards = document.querySelectorAll(".cenexel-study-card");
 
   if (!form) return;
 
@@ -103,7 +103,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const ageChecks = document.querySelectorAll(
     'input[name="cenexel_filter_age"]'
   );
-  const compSelect = document.getElementById("cenexel-filter-comp");
   const clearFiltersBtn = document.getElementById("cenexel-clear-filters");
 
   // Toggle filters panel
@@ -127,8 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter((c) => c.checked)
         .map((c) => c.value)
     );
-    const comp = (compSelect?.value || "any").toString();
-    return { sex, ages, comp };
+    return { sex, ages };
   };
 
   const rowMatches = (row, filters) => {
@@ -139,7 +137,6 @@ document.addEventListener("DOMContentLoaded", () => {
         .map((s) => s.trim())
         .filter(Boolean)
     );
-    const hasComp = (row.dataset.hasComp || "0") === "1";
 
     // Sex filter: if female/male, include exact match OR "all" (open to all)
     if (filters.sex !== "all") {
@@ -155,23 +152,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!ok) return false;
     }
 
-    // Compensation filter
-    if (filters.comp === "paid" && !hasComp) return false;
-    if (filters.comp === "unspecified" && hasComp) return false;
-
     return true;
   };
 
   const applyFilters = () => {
     const filters = getActiveFilters();
 
-    studyRows.forEach((row) => {
-      const visible = rowMatches(row, filters);
-      row.style.display = visible ? "" : "none";
+    studyCards.forEach((card) => {
+      const visible = rowMatches(card, filters);
+      card.style.display = visible ? "" : "none";
 
-      // If a row is hidden, uncheck it so Continue doesn't stay enabled invisibly
+      // If a card is hidden, uncheck it so Continue doesn't stay enabled invisibly
       if (!visible) {
-        const cb = row.querySelector(".cenexel-study-checkbox");
+        const cb = card.querySelector(".cenexel-study-checkbox");
         if (cb && cb.checked) {
           cb.checked = false;
           cb.dispatchEvent(new Event("change", { bubbles: true }));
@@ -188,15 +181,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (all) all.checked = true;
     // Ages -> none
     ageChecks.forEach((c) => (c.checked = false));
-    // Comp -> any
-    if (compSelect) compSelect.value = "any";
     applyFilters();
   };
 
   // Wire filter events
   sexRadios.forEach((r) => r.addEventListener("change", applyFilters));
   ageChecks.forEach((c) => c.addEventListener("change", applyFilters));
-  if (compSelect) compSelect.addEventListener("change", applyFilters);
   if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
 
   // Handle study selection - enable/disable continue button
@@ -219,6 +209,27 @@ document.addEventListener("DOMContentLoaded", () => {
       showStep("form");
     });
   }
+
+  // Make study cards clickable (but not the title link)
+  studyCards.forEach((card) => {
+    card.addEventListener("click", (e) => {
+      // Don't toggle if clicking the checkbox itself or a link
+      if (
+        e.target.classList.contains("cenexel-study-checkbox") ||
+        e.target.closest(".cenexel-study-title") ||
+        e.target.tagName === "A"
+      ) {
+        return;
+      }
+
+      // Toggle the checkbox
+      const checkbox = card.querySelector(".cenexel-study-checkbox");
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+  });
 
   // Handle form submission
   form.addEventListener("submit", async (e) => {
