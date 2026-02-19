@@ -86,6 +86,195 @@ This will log debug information to `/wp-content/debug.log` when:
 
 The debug logs will help identify which meta keys are being used for location data. Once you've found the correct fields, you can disable debugging by removing or setting the constant to `false`.
 
+## UTM Tracking & Marketing Attribution
+
+The plugin includes comprehensive UTM parameter tracking for marketing attribution. This allows your marketing team to track campaign effectiveness, identify lead sources, and measure ROI.
+
+### Supported UTM Parameters
+
+The plugin automatically captures these standard UTM parameters:
+
+- `utm_source` - The source of traffic (e.g., "google", "facebook", "newsletter")
+- `utm_medium` - The marketing medium (e.g., "cpc", "email", "social")
+- `utm_campaign` - The campaign name (e.g., "summer_2026_diabetes_study")
+- `utm_content` - Content identifier for A/B testing (e.g., "cta_button", "text_link")
+- `utm_term` - Paid search keywords (e.g., "diabetes+clinical+trial")
+
+### How UTM Tracking Works
+
+The plugin captures UTM values using a three-tier priority system:
+
+1. **URL Query Parameters** (Highest Priority)
+
+   - Fresh UTM values from the current URL
+   - Example: `/studies?site=anaheim-ca&utm_source=google&utm_campaign=diabetes2026`
+
+2. **WordPress Cookies** (Fallback)
+
+   - Values stored by WordPress or analytics plugins
+   - Supports common formats: `utm_source`, `_ga_utm_source`, `wp_utm_source`
+
+3. **Configured Defaults** (Lowest Priority)
+   - Set in the JavaScript configuration (see below)
+
+### Attribution Models
+
+The plugin implements a **dual attribution model**:
+
+- **Last-Touch Attribution**: The most recent UTM values (30-day cookie)
+
+  - Tracks the final touchpoint before conversion
+  - Fields: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
+
+- **First-Touch Attribution**: The original acquisition source (365-day cookie)
+  - Tracks the initial touchpoint
+  - Fields: `first_utm_source`, `first_utm_medium`, `first_utm_campaign`, `first_utm_content`, `first_utm_term`
+
+### Configuring Default UTM Values
+
+You can set default UTM values by editing `assets/cenexel-location-leads.js`:
+
+```javascript
+// Configuration: Set default UTM values here
+const UTM_DEFAULTS = {
+  utm_source: "", // e.g., "direct" or leave empty
+  utm_medium: "", // e.g., "none" or leave empty
+  utm_campaign: "",
+  utm_content: "",
+  utm_term: "",
+};
+```
+
+**Best Practices**:
+
+- Leave empty for organic/direct traffic
+- Set defaults only if you need to track untagged traffic
+- Use lowercase, hyphenated values (e.g., "organic-search")
+
+### Example Marketing URLs
+
+**Google Ads Campaign**:
+
+```
+https://cenexelclinicaltrials.com/studies?site=anaheim-ca&utm_source=google&utm_medium=cpc&utm_campaign=diabetes_2026&utm_content=headline_a&utm_term=diabetes+trial
+```
+
+**Email Newsletter**:
+
+```
+https://cenexelclinicaltrials.com/studies?site=anaheim-ca&utm_source=newsletter&utm_medium=email&utm_campaign=monthly_jan2026
+```
+
+**Facebook Ad**:
+
+```
+https://cenexelclinicaltrials.com/studies?site=anaheim-ca&utm_source=facebook&utm_medium=social&utm_campaign=covid_vaccine&utm_content=video_ad
+```
+
+### Data Sent to Azure
+
+All UTM parameters are automatically included in the lead submission payload sent to Azure:
+
+```json
+{
+  "first_name": "John",
+  "email": "john@example.com",
+  "utm_source": "google",
+  "utm_medium": "cpc",
+  "utm_campaign": "diabetes_2026",
+  "utm_content": "headline_a",
+  "utm_term": "diabetes+trial",
+  "first_utm_source": "facebook",
+  "first_utm_medium": "social",
+  "first_utm_campaign": "awareness_2026"
+}
+```
+
+### Azure Function Database Schema
+
+To store UTM data in your Azure database, add these columns to your `clinical_trial_leads` table:
+
+```sql
+-- Last-touch attribution (most recent)
+ALTER TABLE clinical_trial_leads ADD COLUMN utm_source VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN utm_medium VARCHAR(100);
+ALTER TABLE clinical_trial_leads ADD COLUMN utm_campaign VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN utm_content VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN utm_term VARCHAR(255);
+
+-- First-touch attribution (original)
+ALTER TABLE clinical_trial_leads ADD COLUMN first_utm_source VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN first_utm_medium VARCHAR(100);
+ALTER TABLE clinical_trial_leads ADD COLUMN first_utm_campaign VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN first_utm_content VARCHAR(255);
+ALTER TABLE clinical_trial_leads ADD COLUMN first_utm_term VARCHAR(255);
+
+-- Add indexes for reporting
+CREATE INDEX idx_utm_source ON clinical_trial_leads(utm_source);
+CREATE INDEX idx_utm_campaign ON clinical_trial_leads(utm_campaign);
+CREATE INDEX idx_first_utm_source ON clinical_trial_leads(first_utm_source);
+```
+
+### Marketing Reporting Queries
+
+**Lead volume by source**:
+
+```sql
+SELECT utm_source, utm_medium, COUNT(*) as lead_count
+FROM clinical_trial_leads
+WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+GROUP BY utm_source, utm_medium
+ORDER BY lead_count DESC;
+```
+
+**Campaign performance**:
+
+```sql
+SELECT utm_campaign,
+       COUNT(*) as total_leads,
+       COUNT(DISTINCT email) as unique_patients
+FROM clinical_trial_leads
+WHERE utm_campaign IS NOT NULL
+GROUP BY utm_campaign
+ORDER BY total_leads DESC;
+```
+
+**First-touch vs Last-touch comparison**:
+
+```sql
+SELECT
+  first_utm_source as first_source,
+  utm_source as last_source,
+  COUNT(*) as conversion_count
+FROM clinical_trial_leads
+WHERE first_utm_source IS NOT NULL
+  AND utm_source IS NOT NULL
+GROUP BY first_utm_source, utm_source;
+```
+
+### Testing UTM Tracking
+
+To test UTM tracking:
+
+1. Visit your studies page with UTM parameters:
+
+   ```
+   /studies?site=anaheim-ca&utm_source=test&utm_campaign=test123
+   ```
+
+2. Open browser console and check:
+
+   ```javascript
+   console.log(window.CENEXEL_UTM);
+   ```
+
+3. Submit a test lead and verify the UTM data is included in the Azure submission
+
+4. Check browser cookies to confirm persistence:
+   ```javascript
+   document.cookie.split(";").filter((c) => c.includes("utm"));
+   ```
+
 ## Auto-Updates
 
 This plugin includes built-in GitHub auto-update functionality. When a new release is published on GitHub, WordPress will automatically detect it and allow one-click updates from the admin dashboard.

@@ -1,6 +1,6 @@
 {
-  "version": "0.9.31",
-  "date": "2026-01-09",
+  "version": "0.9.35",
+  "date": "2026-01-16",
   "notes": [
     "Restored form fields (Date of Birth, Gender, Caregiver checkbox)",
     "Updated form styling to match design requirements",
@@ -16,7 +16,11 @@
     "Added study filters (Sex, Age, Compensation) above studies list",
     "Replaced study subtitle/description with Gender, Age, Compensation, and Status fields",
     "Updated meta field mappings to use exact WordPress field names (gender_ta, age_low_ta, age_high_ta, compensation_ta, status_ta)",
-    "Implemented client-side filtering for studies based on eligibility criteria"
+    "Implemented client-side filtering for studies based on eligibility criteria",
+    "Added UTM parameter tracking for marketing attribution (utm_source, utm_medium, utm_campaign, utm_content, utm_term)",
+    "Implemented dual attribution model (last-touch and first-touch) for comprehensive marketing analytics",
+    "UTM values captured from URL query string (priority 1), WordPress cookies (priority 2), or configurable defaults",
+    "UTM data persists in cookies (30 days for last-touch, 365 days for first-touch) and included in Azure submissions"
   ],
   "author": "CenExel",
   "plugin_slug": "cenexel-location-leads"

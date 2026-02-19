@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: CenExel Location Lead Landing
- * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
- * Version: 0.9.31
- */
+  * Plugin Name: CenExel Location Lead Landing
+  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
+  * Version: 0.9.35
+  */
 
 if (!defined('ABSPATH')) exit;
 
@@ -1047,6 +1047,14 @@ class Cenexel_Location_Leads {
                   'status_ta',
                   'status',
                 ]));
+                $campaign_activity = trim((string)$this->get_post_meta_first_nonempty($post_id, [
+                  'campaign_activity',
+                  'campaign-activity',
+                  'campaign_activity_ta',
+                  'campaign_activity_field',
+                  'wpcf-campaign-activity',
+                ]));
+                $campaign_value = $campaign_activity !== '' ? $campaign_activity : (string)$post_id;
 
                 $permalink = get_permalink($p);
                 $checkbox_id = 'cenexel-study-' . $post_id;
@@ -1060,8 +1068,8 @@ class Cenexel_Location_Leads {
                   <input
                     class="cenexel-study-checkbox"
                     type="checkbox"
-                    name="post_ids[]"
-                    value="<?php echo esc_attr($post_id); ?>"
+                    name="campaign_activities[]"
+                    value="<?php echo esc_attr($campaign_value); ?>"
                     id="<?php echo esc_attr($checkbox_id); ?>"
                   />
                   <div class="cenexel-study-content">
@@ -1155,6 +1163,10 @@ class Cenexel_Location_Leads {
                   </a>.
                 </span>
               </label>
+              <label class="cenexel-checkbox">
+                <input type="checkbox" name="sms_consent" />
+                <span>I agree to receive SMS/text messages.</span>
+              </label>
             </div>
 
             <button type="submit" class="cenexel-submit-button">Submit</button>
@@ -1212,7 +1224,13 @@ class Cenexel_Location_Leads {
 
     $data = $req->get_json_params();
 
-    $post_ids_raw = is_array($data['post_ids'] ?? []) ? $data['post_ids'] : [];
+    $campaign_activities_raw = is_array($data['campaign_activities'] ?? [])
+      ? $data['campaign_activities']
+      : [];
+    $campaign_activities = array_values(array_filter(array_map(
+      'sanitize_text_field',
+      $campaign_activities_raw
+    )));
     $payload = [
       'location_term_id' => (int)($data['location_term_id'] ?? 0),
       'site_slug'        => sanitize_title($data['site_slug'] ?? ''),
@@ -1225,17 +1243,30 @@ class Cenexel_Location_Leads {
       'gender'           => sanitize_text_field($data['gender'] ?? ''),
       'is_caregiver'     => (bool)($data['is_caregiver'] ?? false),
       'consent'          => (bool)($data['consent'] ?? false),
-      'post_ids'         => array_map('intval', $post_ids_raw),
+      'sms_consent'      => (bool)($data['sms_consent'] ?? false),
+      'campaign_activities' => $campaign_activities,
       'submitted_at'     => gmdate('c'),
       'source'           => 'cenexelclinicaltrials.com',
       'ip'               => $ip,
       'user_agent'       => substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255),
+      // UTM Parameters (last-touch attribution)
+      'utm_source'       => sanitize_text_field($data['utm_source'] ?? ''),
+      'utm_medium'       => sanitize_text_field($data['utm_medium'] ?? ''),
+      'utm_campaign'     => sanitize_text_field($data['utm_campaign'] ?? ''),
+      'utm_content'      => sanitize_text_field($data['utm_content'] ?? ''),
+      'utm_term'         => sanitize_text_field($data['utm_term'] ?? ''),
+      // First-touch attribution (original acquisition)
+      'first_utm_source'   => sanitize_text_field($data['first_utm_source'] ?? ''),
+      'first_utm_medium'   => sanitize_text_field($data['first_utm_medium'] ?? ''),
+      'first_utm_campaign' => sanitize_text_field($data['first_utm_campaign'] ?? ''),
+      'first_utm_content'  => sanitize_text_field($data['first_utm_content'] ?? ''),
+      'first_utm_term'     => sanitize_text_field($data['first_utm_term'] ?? ''),
     ];
 
     if (!$payload['consent'] || !$payload['first_name'] || !$payload['last_name'] || !$payload['email'] || !$payload['site_slug']) {
       return new WP_REST_Response(['error' => 'Missing required fields.'], 400);
     }
-    if (empty($payload['post_ids'])) {
+    if (empty($payload['campaign_activities'])) {
       return new WP_REST_Response(['error' => 'Select at least one study.'], 400);
     }
 

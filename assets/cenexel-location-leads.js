@@ -1,4 +1,142 @@
 // assets/cenexel-location-leads.js
+
+/**
+ * UTM Parameter Tracking Module
+ * Captures UTM values from URL query string (priority 1) or WordPress cookies (priority 2)
+ * with configurable defaults
+ */
+(function () {
+  "use strict";
+
+  // Configuration: Set default UTM values here (can be overridden by URL or cookies)
+  const UTM_DEFAULTS = {
+    utm_source: "", // e.g., "direct" or leave empty
+    utm_medium: "", // e.g., "none" or leave empty
+    utm_campaign: "",
+    utm_content: "",
+    utm_term: "",
+  };
+
+  const UTM_PARAMS = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+  ];
+
+  /**
+   * Get cookie value by name
+   */
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return decodeURIComponent(parts.pop().split(";").shift());
+    }
+    return null;
+  }
+
+  /**
+   * Set cookie with expiration
+   */
+  function setCookie(name, value, days = 30) {
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    const expires = `expires=${d.toUTCString()}`;
+    document.cookie = `${name}=${encodeURIComponent(
+      value
+    )};${expires};path=/;SameSite=Lax`;
+  }
+
+  /**
+   * Get URL query parameter
+   */
+  function getQueryParam(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+  }
+
+  /**
+   * Capture UTM parameters with priority: URL > Cookies > Defaults
+   */
+  function captureUTMParameters() {
+    const captured = {};
+
+    UTM_PARAMS.forEach((param) => {
+      let value = null;
+
+      // Priority 1: URL query string (highest priority)
+      value = getQueryParam(param);
+
+      // Priority 2: WordPress cookies
+      if (!value) {
+        // Check common WordPress cookie formats
+        value =
+          getCookie(param) || // Plain format: utm_source
+          getCookie(`_ga_${param}`) || // Google Analytics: _ga_utm_source
+          getCookie(`wp_${param}`); // WordPress plugin: wp_utm_source
+      }
+
+      // Priority 3: Defaults from configuration
+      if (!value && UTM_DEFAULTS[param]) {
+        value = UTM_DEFAULTS[param];
+      }
+
+      if (value) {
+        captured[param] = value;
+        // Store in cookie for persistence (30 days)
+        setCookie(param, value, 30);
+      }
+    });
+
+    return captured;
+  }
+
+  /**
+   * Get first-touch UTM values (original acquisition source)
+   */
+  function getFirstTouchUTM() {
+    const firstTouch = {};
+
+    UTM_PARAMS.forEach((param) => {
+      const firstValue = getCookie(`first_${param}`);
+      if (firstValue) {
+        firstTouch[`first_${param}`] = firstValue;
+      }
+    });
+
+    return firstTouch;
+  }
+
+  /**
+   * Store first-touch attribution (only if not already set)
+   */
+  function storeFirstTouch(utmValues) {
+    Object.keys(utmValues).forEach((key) => {
+      const firstKey = `first_${key}`;
+      if (!getCookie(firstKey)) {
+        // Set first-touch cookie for 365 days (1 year)
+        setCookie(firstKey, utmValues[key], 365);
+      }
+    });
+  }
+
+  // Capture UTM on page load
+  const currentUTM = captureUTMParameters();
+
+  // Store first-touch if this is their first visit with UTM
+  if (Object.keys(currentUTM).length > 0) {
+    storeFirstTouch(currentUTM);
+  }
+
+  // Make available globally for form submission
+  window.CENEXEL_UTM = {
+    current: currentUTM,
+    firstTouch: getFirstTouchUTM(),
+  };
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
   const stepStudies = document.getElementById("cenexel-step-studies");
   const stepForm = document.getElementById("cenexel-step-form");
@@ -13,17 +151,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const status = document.getElementById("cenexel-status");
 
-  // Store selected study IDs
-  let selectedStudyIds = [];
+  // Store selected campaign activities
+  let selectedCampaignActivities = [];
 
-  const getSelectedStudyIds = () =>
+  const getSelectedCampaignActivities = () =>
     Array.from(document.querySelectorAll(".cenexel-study-checkbox:checked"))
-      .map((cb) => Number(cb.value))
-      .filter((n) => Number.isFinite(n));
+      .map((cb) => (cb.value || "").toString().trim())
+      .filter(Boolean);
 
   const updateContinueState = () => {
-    selectedStudyIds = getSelectedStudyIds();
-    if (continueBtn) continueBtn.disabled = selectedStudyIds.length === 0;
+    selectedCampaignActivities = getSelectedCampaignActivities();
+    if (continueBtn) continueBtn.disabled = selectedCampaignActivities.length === 0;
     if (studyError) studyError.style.display = "none";
   };
 
@@ -199,7 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Handle continue button click
     continueBtn.addEventListener("click", () => {
-      if (selectedStudyIds.length === 0) {
+      if (selectedCampaignActivities.length === 0) {
         studyError.textContent = "Please select at least one study.";
         studyError.style.display = "block";
         return;
@@ -251,14 +389,21 @@ document.addEventListener("DOMContentLoaded", () => {
       is_caregiver:
         fd.get("is_caregiver") === "1" || fd.get("is_caregiver") === "on",
       consent: fd.get("consent") === "on",
-      post_ids:
-        selectedStudyIds.length > 0
-          ? selectedStudyIds
+      sms_consent: fd.get("sms_consent") === "on",
+      campaign_activities:
+        selectedCampaignActivities.length > 0
+          ? selectedCampaignActivities
           : fd
-              .getAll("post_ids[]")
-              .map((x) => Number(x))
-              .filter((n) => Number.isFinite(n)),
+              .getAll("campaign_activities[]")
+              .map((x) => (x || "").toString().trim())
+              .filter(Boolean),
+      // Add UTM parameters (last-touch attribution)
+      ...window.CENEXEL_UTM?.current,
+      // Add first-touch attribution
+      ...window.CENEXEL_UTM?.firstTouch,
     };
+
+    console.log("CenExel lead payload (testing)", payload);
 
     try {
       const res = await fetch(CENEXEL.restUrl, {
@@ -302,7 +447,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Reset form
       if (form) form.reset();
       // Clear selected studies
-      selectedStudyIds = [];
+      selectedCampaignActivities = [];
       studyCheckboxes.forEach((checkbox) => {
         checkbox.checked = false;
       });
