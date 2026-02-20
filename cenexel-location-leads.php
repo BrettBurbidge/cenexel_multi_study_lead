@@ -1,8 +1,8 @@
 <?php
 /**
   * Plugin Name: CenExel Location Lead Landing
-  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads to Azure.
-  * Version: 0.9.35
+  * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads via email.
+  * Version: 0.9.46
   */
 
 if (!defined('ABSPATH')) exit;
@@ -964,158 +964,17 @@ class Cenexel_Location_Leads {
         ?>
 
         <div class="cenexel-content-wrapper">
-        <!-- Step 1: Study Selection -->
-        <div id="cenexel-step-studies" class="cenexel-step">
-        <h2 class="cenexel-available-studies-title">Available Clinical Trials</h2>
-          <p class="cenexel-step-instructions">Please select the studies you're interested in:</p>
 
-          <div class="cenexel-study-filters-wrapper">
-            <button type="button" class="cenexel-study-filters-toggle" aria-expanded="false" aria-controls="cenexel-study-filters">
-              <span class="cenexel-study-filters-toggle-text">Show Filters</span>
-              <span class="cenexel-study-filters-toggle-icon">▼</span>
-            </button>
-            
-            <div class="cenexel-study-filters" id="cenexel-study-filters" aria-label="Eligibility Criteria Filters" style="display: none;">
-              <div class="cenexel-study-filters-title">Eligibility Criteria</div>
-
-              <div class="cenexel-filter-group">
-              <div class="cenexel-filter-group-title">Sex</div>
-              <label class="cenexel-radio">
-                <input type="radio" name="cenexel_filter_sex" value="all" checked />
-                <span>All</span>
-              </label>
-              <label class="cenexel-radio">
-                <input type="radio" name="cenexel_filter_sex" value="female" />
-                <span>Female</span>
-              </label>
-              <label class="cenexel-radio">
-                <input type="radio" name="cenexel_filter_sex" value="male" />
-                <span>Male</span>
-            </label>
-          </div>
-
-            <div class="cenexel-filter-group">
-              <div class="cenexel-filter-group-title">Age</div>
-              <label class="cenexel-checkbox-inline">
-                <input type="checkbox" name="cenexel_filter_age" value="child" />
-                <span>Child (birth - 17)</span>
-              </label>
-              <label class="cenexel-checkbox-inline">
-                <input type="checkbox" name="cenexel_filter_age" value="adult" />
-                <span>Adult (18 - 64)</span>
-              </label>
-              <label class="cenexel-checkbox-inline">
-                <input type="checkbox" name="cenexel_filter_age" value="older" />
-                <span>Older adult (65+)</span>
-              </label>
-            </div>
-
-              <div class="cenexel-filter-actions">
-                <button type="button" id="cenexel-clear-filters" class="cenexel-filter-clear">Clear filters</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="cenexel-studies">
-            <?php if (empty($posts)): ?>
-              <div class="cenexel-no-studies">No studies found for this site.</div>
-            <?php else: ?>
-              <?php foreach ($posts as $p):
-                $post_id = (int)$p->ID;
-
-                $study_title = trim((string)get_post_meta($post_id, self::META_STUDY_TITLE, true));
-                if ($study_title === '') $study_title = get_the_title($p);
-
-                // Get gender - using actual field names
-                $gender_raw = $this->get_post_meta_first_nonempty($post_id, [
-                  'select_gender',
-                  'gender_ta',
-                  'sex',
-                  'gender',
-                  'study_gender',
-                  'eligibility_sex',
-                  'eligibility_gender',
-                  'participant_gender',
-                ]);
-                
-                $gender = $this->normalize_study_gender($gender_raw);
-                $age = $this->parse_study_age($post_id);
-                $comp = $this->parse_study_compensation($post_id);
-                // Get status - check actual field name first, then fallback
-                $status = trim((string)$this->get_post_meta_first_nonempty($post_id, [
-                  'study_status',
-                  'status_ta',
-                  'status',
-                ]));
-                $campaign_activity = trim((string)$this->get_post_meta_first_nonempty($post_id, [
-                  'campaign_activity',
-                  'campaign-activity',
-                  'campaign_activity_ta',
-                  'campaign_activity_field',
-                  'wpcf-campaign-activity',
-                ]));
-                $campaign_value = $campaign_activity !== '' ? $campaign_activity : (string)$post_id;
-
-                $permalink = get_permalink($p);
-                $checkbox_id = 'cenexel-study-' . $post_id;
-              ?>
-                <div
-                  class="cenexel-study-card"
-                  data-gender="<?php echo esc_attr($gender['key']); ?>"
-                  data-age-buckets="<?php echo esc_attr(implode(',', $age['buckets'])); ?>"
-                  data-post-id="<?php echo esc_attr($post_id); ?>"
-                >
-                  <input
-                    class="cenexel-study-checkbox"
-                    type="checkbox"
-                    name="campaign_activities[]"
-                    value="<?php echo esc_attr($campaign_value); ?>"
-                    id="<?php echo esc_attr($checkbox_id); ?>"
-                  />
-                  <div class="cenexel-study-content">
-                    <a class="cenexel-study-title" href="<?php echo esc_url($permalink); ?>" target="_blank" rel="noopener noreferrer">
-                      <?php echo esc_html($study_title); ?>
-                    </a>
-
-                    <div class="cenexel-study-meta">
-                      <span class="cenexel-study-meta-item"><strong>Gender</strong> <?php echo esc_html($gender['label']); ?></span>
-                      <span class="cenexel-study-meta-separator">|</span>
-                      <span class="cenexel-study-meta-item"><strong>Age</strong> <?php echo esc_html($age['label']); ?></span>
-                      <?php if ($comp['has'] === '1'): ?>
-                        <span class="cenexel-study-meta-separator">|</span>
-                        <span class="cenexel-study-meta-item"><strong>Compensation</strong> <?php echo esc_html($comp['label']); ?></span>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                  <?php if ($status !== ''): ?>
-                    <div class="cenexel-study-status" data-status="<?php echo esc_attr(strtolower($status)); ?>">
-                      <?php echo esc_html($status); ?>
-                    </div>
-                  <?php endif; ?>
-                </div>
-              <?php endforeach; ?>
-            <?php endif; ?>
-          </div>
-
-          <?php if (!empty($posts)): ?>
-            <button type="button" id="cenexel-continue-btn" class="cenexel-continue-button" disabled>
-              Continue
-            </button>
-            <div id="cenexel-study-error" class="cenexel-error-message" style="display: none;"></div>
-          <?php endif; ?>
-        </div>
-
-        <!-- Step 2: Form -->
-        <div id="cenexel-step-form" class="cenexel-step" style="display: none;">
-          <button type="button" id="cenexel-back-to-studies-from-form" class="cenexel-back-button" style="margin-bottom: 1rem;">
-            ← Back to Studies
-          </button>
-          <h2 class="cenexel-form-title">Your Information</h2>
-          <p class="cenexel-step-instructions">Please fill out the form below to continue:</p>
-
+        <!-- Main Form -->
+        <div id="cenexel-form-wrapper">
           <form id="cenexel-lead-form">
             <input type="hidden" name="location_term_id" value="<?php echo esc_attr($term_id ?: 0); ?>" />
             <input type="hidden" name="site_slug" value="<?php echo esc_attr($site_slug); ?>" />
+
+            <h2 class="cenexel-form-title">Your Information</h2>
+            <p class="cenexel-step-instructions">Please fill out the form below and select the studies you're interested in:</p>
+
+            <div id="cenexel-validation-errors" class="cenexel-validation-errors" style="display: none;"></div>
 
             <div class="cenexel-form-card">
               <div class="cenexel-field">
@@ -1127,8 +986,8 @@ class Cenexel_Location_Leads {
                 <input id="cenexel-last-name" name="last_name" placeholder="Enter your last name" autocomplete="family-name" required />
               </div>
               <div class="cenexel-field">
-                <label for="cenexel-email">Email <span aria-hidden="true">*</span></label>
-                <input id="cenexel-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" required />
+                <label for="cenexel-email">Email</label>
+                <input id="cenexel-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" />
               </div>
               <div class="cenexel-field">
                 <label for="cenexel-phone">Phone <span aria-hidden="true">*</span></label>
@@ -1139,8 +998,30 @@ class Cenexel_Location_Leads {
                 <input id="cenexel-zip" name="zip" placeholder="Enter your zip" autocomplete="postal-code" required />
               </div>
               <div class="cenexel-field">
-                <label for="cenexel-dob">Date of Birth <span aria-hidden="true">*</span></label>
-                <input id="cenexel-dob" name="date_of_birth" type="date" placeholder="mm/dd/yyyy" required />
+                <label>Date of Birth <span aria-hidden="true">*</span></label>
+                <div class="cenexel-dob-dropdowns">
+                  <select id="cenexel-dob-month" name="dob_month">
+                    <option value="">Month</option>
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                      <option value="<?php echo $m; ?>"><?php echo date('F', mktime(0, 0, 0, $m, 1)); ?></option>
+                    <?php endfor; ?>
+                  </select>
+                  <select id="cenexel-dob-day" name="dob_day">
+                    <option value="">Day</option>
+                    <?php for ($d = 1; $d <= 31; $d++): ?>
+                      <option value="<?php echo $d; ?>"><?php echo $d; ?></option>
+                    <?php endfor; ?>
+                  </select>
+                  <select id="cenexel-dob-year" name="dob_year" required>
+                    <option value="">Year *</option>
+                    <?php
+                      $current_year = (int)date('Y');
+                      for ($y = $current_year; $y >= $current_year - 100; $y--):
+                    ?>
+                      <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                    <?php endfor; ?>
+                  </select>
+                </div>
               </div>
               <div class="cenexel-field">
                 <label for="cenexel-gender">Gender <span aria-hidden="true">*</span></label>
@@ -1169,13 +1050,60 @@ class Cenexel_Location_Leads {
               </label>
             </div>
 
+            <!-- Study Selection -->
+            <h2 class="cenexel-available-studies-title">Available Clinical Trials</h2>
+            <p class="cenexel-step-instructions">Please select the studies you're interested in:</p>
+
+            <div class="cenexel-studies">
+              <?php if (empty($posts)): ?>
+                <div class="cenexel-no-studies">No studies found for this site.</div>
+              <?php else: ?>
+                <?php foreach ($posts as $p):
+                  $post_id = (int)$p->ID;
+
+                  $study_title = trim((string)get_post_meta($post_id, self::META_STUDY_TITLE, true));
+                  if ($study_title === '') $study_title = get_the_title($p);
+
+                  $campaign_activity = trim((string)$this->get_post_meta_first_nonempty($post_id, [
+                    'utm_content',
+                    'utm_content_ta',
+                    'campaign_activity',
+                    'campaign-activity',
+                    'campaign_activity_ta',
+                    'campaign_activity_field',
+                    'wpcf-campaign-activity',
+                  ]));
+                  $campaign_value = $campaign_activity !== '' ? $campaign_activity : (string)$post_id;
+
+                  $checkbox_id = 'cenexel-study-' . $post_id;
+                ?>
+                  <label
+                    class="cenexel-study-item"
+                    data-post-id="<?php echo esc_attr($post_id); ?>"
+                    for="<?php echo esc_attr($checkbox_id); ?>"
+                  >
+                    <input
+                      class="cenexel-study-checkbox"
+                      type="checkbox"
+                      name="campaign_activities[]"
+                      value="<?php echo esc_attr($campaign_value); ?>"
+                      data-title="<?php echo esc_attr($study_title); ?>"
+                      id="<?php echo esc_attr($checkbox_id); ?>"
+                    />
+                    <span class="cenexel-study-title"><?php echo esc_html($study_title); ?></span>
+                  </label>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </div>
+
+            <div id="cenexel-study-error" class="cenexel-error-message" style="display: none;"></div>
             <button type="submit" class="cenexel-submit-button">Submit</button>
-          <div id="cenexel-status" aria-live="polite"></div>
-        </form>
+            <div id="cenexel-status" aria-live="polite"></div>
+          </form>
         </div>
 
-        <!-- Step 3: Thank You -->
-        <div id="cenexel-step-thankyou" class="cenexel-step" style="display: none;">
+        <!-- Thank You -->
+        <div id="cenexel-step-thankyou" style="display: none;">
           <div class="cenexel-thank-you">
             <h2 class="cenexel-thank-you-title">Thank You!</h2>
             <p class="cenexel-thank-you-message">
@@ -1231,12 +1159,13 @@ class Cenexel_Location_Leads {
       'sanitize_text_field',
       $campaign_activities_raw
     )));
+    $raw_email = sanitize_email($data['email'] ?? '');
     $payload = [
       'location_term_id' => (int)($data['location_term_id'] ?? 0),
       'site_slug'        => sanitize_title($data['site_slug'] ?? ''),
       'first_name'       => sanitize_text_field($data['first_name'] ?? ''),
       'last_name'        => sanitize_text_field($data['last_name'] ?? ''),
-      'email'            => sanitize_email($data['email'] ?? ''),
+      'email'            => $raw_email ?: 'noemail@cenexel.com',
       'phone'            => sanitize_text_field($data['phone'] ?? ''),
       'zip'              => sanitize_text_field($data['zip'] ?? ''),
       'date_of_birth'    => sanitize_text_field($data['date_of_birth'] ?? ''),
@@ -1245,6 +1174,8 @@ class Cenexel_Location_Leads {
       'consent'          => (bool)($data['consent'] ?? false),
       'sms_consent'      => (bool)($data['sms_consent'] ?? false),
       'campaign_activities' => $campaign_activities,
+      'studies'          => is_array($data['studies'] ?? null) ? $data['studies'] : [],
+      'event'            => sanitize_text_field($data['event'] ?? ''),
       'submitted_at'     => gmdate('c'),
       'source'           => 'cenexelclinicaltrials.com',
       'ip'               => $ip,
@@ -1263,43 +1194,107 @@ class Cenexel_Location_Leads {
       'first_utm_term'     => sanitize_text_field($data['first_utm_term'] ?? ''),
     ];
 
-    if (!$payload['consent'] || !$payload['first_name'] || !$payload['last_name'] || !$payload['email'] || !$payload['site_slug']) {
+    if (!$payload['consent'] || !$payload['first_name'] || !$payload['last_name'] || !$payload['site_slug']) {
       return new WP_REST_Response(['error' => 'Missing required fields.'], 400);
     }
-    if (empty($payload['campaign_activities'])) {
-      return new WP_REST_Response(['error' => 'Select at least one study.'], 400);
+
+    if (!defined('SENDGRID_API_KEY') || !SENDGRID_API_KEY) {
+      error_log('[CenExel Lead] SENDGRID_API_KEY not defined in wp-config.php');
+      return new WP_REST_Response(['error' => 'Email service not configured.'], 500);
+    }
+    if (!defined('CENEXEL_LEAD_EMAIL') || !CENEXEL_LEAD_EMAIL) {
+      error_log('[CenExel Lead] CENEXEL_LEAD_EMAIL not defined in wp-config.php');
+      return new WP_REST_Response(['error' => 'Lead recipient not configured.'], 500);
+    }
+    error_log('[CenExel Lead] Sending to ' . CENEXEL_LEAD_EMAIL . ' via SendGrid');
+
+    // Build HTML email
+    $td_label = 'style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f8f9fa;white-space:nowrap;"';
+    $td_value = 'style="padding:8px 12px;border:1px solid #ddd;"';
+    $html = '<h2 style="color:#213eaa;">New Lead Submission</h2>';
+    $html .= '<table style="border-collapse:collapse;width:100%;max-width:600px;font-family:Arial,sans-serif;">';
+    $rows = [
+      'Name'               => esc_html($payload['first_name'] . ' ' . $payload['last_name']),
+      'Email'              => esc_html($payload['email']),
+      'Phone'              => esc_html($payload['phone']),
+      'ZIP Code'           => esc_html($payload['zip']),
+      'Date of Birth'      => esc_html($payload['date_of_birth']),
+      'Gender'             => esc_html($payload['gender']),
+      'Caregiver'          => $payload['is_caregiver'] ? 'Yes' : 'No',
+      'SMS Consent'        => $payload['sms_consent'] ? 'Yes' : 'No',
+      'Site'               => esc_html($payload['site_slug']),
+      'Event'              => esc_html($payload['event']),
+      'Submitted'          => esc_html($payload['submitted_at']),
+      'Source'             => esc_html($payload['source']),
+    ];
+    foreach ($rows as $label => $value) {
+      if ($value === '') continue;
+      $html .= '<tr>';
+      $html .= '<td ' . $td_label . '>' . esc_html($label) . '</td>';
+      $html .= '<td ' . $td_value . '>' . $value . '</td>';
+      $html .= '</tr>';
     }
 
-    if (!defined('CENEXEL_AZURE_LEAD_ENDPOINT') || !CENEXEL_AZURE_LEAD_ENDPOINT) {
-      return new WP_REST_Response(['error' => 'Azure endpoint not configured.'], 500);
+    // Add studies as individual rows
+    $studies = $payload['studies'];
+    if (!empty($studies)) {
+      foreach ($studies as $i => $study) {
+        $title = sanitize_text_field($study['title'] ?? '');
+        $ca = sanitize_text_field($study['campaign_activity'] ?? '');
+        $display = $title ? $title . ' (' . $ca . ')' : $ca;
+        $label = $i === 0 ? 'Studies' : '';
+        $html .= '<tr>';
+        $html .= '<td ' . $td_label . '>' . esc_html($label) . '</td>';
+        $html .= '<td ' . $td_value . '>' . esc_html($display) . '</td>';
+        $html .= '</tr>';
+      }
+    } else {
+      $html .= '<tr>';
+      $html .= '<td ' . $td_label . '>Studies</td>';
+      $html .= '<td ' . $td_value . '>None Selected</td>';
+      $html .= '</tr>';
     }
+    $html .= '</table>';
 
-    $body = wp_json_encode($payload);
-    $headers = ['Content-Type' => 'application/json'];
+    $subject = sprintf('New Lead: %s %s – %s',
+      $payload['first_name'],
+      $payload['last_name'],
+      $payload['site_slug']
+    );
 
-    if (defined('CENEXEL_AZURE_FUNCTION_KEY') && CENEXEL_AZURE_FUNCTION_KEY) {
-      $headers['x-functions-key'] = CENEXEL_AZURE_FUNCTION_KEY;
-    }
-    if (defined('CENEXEL_AZURE_SHARED_SECRET') && CENEXEL_AZURE_SHARED_SECRET) {
-      $ts = (string) time();
-      $sig = $this->compute_hmac(CENEXEL_AZURE_SHARED_SECRET, $ts, $body);
-      $headers['x-cenexel-ts'] = $ts;
-      $headers['x-cenexel-sig'] = $sig;
-    }
+    $to_list = array_values(array_filter(array_map(function($e) {
+      $e = trim($e);
+      return $e ? ['email' => $e] : null;
+    }, explode(',', CENEXEL_LEAD_EMAIL))));
 
-    $resp = wp_remote_post(CENEXEL_AZURE_LEAD_ENDPOINT, [
-      'headers' => $headers,
-      'body'    => $body,
+    $sg_payload = [
+      'personalizations' => [[
+        'to' => $to_list,
+        'subject' => $subject,
+      ]],
+      'from' => ['email' => 'no-reply@cenexel.com', 'name' => 'CenExel Clinical Trials'],
+      'content' => [['type' => 'text/html', 'value' => $html]],
+    ];
+
+    $resp = wp_remote_post('https://api.sendgrid.com/v3/mail/send', [
+      'headers' => [
+        'Authorization' => 'Bearer ' . SENDGRID_API_KEY,
+        'Content-Type'  => 'application/json',
+      ],
+      'body'    => wp_json_encode($sg_payload),
       'timeout' => 15,
     ]);
 
     if (is_wp_error($resp)) {
-      return new WP_REST_Response(['error' => 'Submission failed.'], 502);
+      error_log('[CenExel Lead] SendGrid WP error: ' . $resp->get_error_message());
+      return new WP_REST_Response(['error' => 'Failed to send email.'], 502);
     }
 
     $code = wp_remote_retrieve_response_code($resp);
+    $body = wp_remote_retrieve_body($resp);
     if ($code < 200 || $code >= 300) {
-      return new WP_REST_Response(['error' => 'Azure rejected submission.'], 502);
+      error_log('[CenExel Lead] SendGrid HTTP ' . $code . ': ' . $body);
+      return new WP_REST_Response(['error' => 'Email service error.'], 502);
     }
 
     return new WP_REST_Response(['ok' => true], 200);

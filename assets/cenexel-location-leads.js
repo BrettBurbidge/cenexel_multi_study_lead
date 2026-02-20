@@ -138,14 +138,11 @@
 })();
 
 document.addEventListener("DOMContentLoaded", () => {
-  const stepStudies = document.getElementById("cenexel-step-studies");
-  const stepForm = document.getElementById("cenexel-step-form");
-  const stepThankYou = document.getElementById("cenexel-step-thankyou");
+  const formWrapper = document.getElementById("cenexel-form-wrapper");
+  const thankYou = document.getElementById("cenexel-step-thankyou");
   const form = document.getElementById("cenexel-lead-form");
-  const continueBtn = document.getElementById("cenexel-continue-btn");
   const studyError = document.getElementById("cenexel-study-error");
   const studyCheckboxes = document.querySelectorAll(".cenexel-study-checkbox");
-  const studyCards = document.querySelectorAll(".cenexel-study-card");
 
   if (!form) return;
 
@@ -159,244 +156,111 @@ document.addEventListener("DOMContentLoaded", () => {
       .map((cb) => (cb.value || "").toString().trim())
       .filter(Boolean);
 
-  const updateContinueState = () => {
+  const getSelectedStudies = () =>
+    Array.from(document.querySelectorAll(".cenexel-study-checkbox:checked"))
+      .map((cb) => ({
+        title: (cb.dataset.title || "").trim(),
+        campaign_activity: (cb.value || "").toString().trim(),
+      }))
+      .filter((s) => s.campaign_activity);
+
+  const updateSelectionState = () => {
     selectedCampaignActivities = getSelectedCampaignActivities();
-    if (continueBtn) continueBtn.disabled = selectedCampaignActivities.length === 0;
     if (studyError) studyError.style.display = "none";
   };
 
-  // Step navigation with History API
-  const showStep = (stepName, addToHistory = true) => {
-    // Hide all steps
-    if (stepStudies) stepStudies.style.display = "none";
-    if (stepForm) stepForm.style.display = "none";
-    if (stepThankYou) stepThankYou.style.display = "none";
-
-    // Show requested step
-    if (stepName === "studies" && stepStudies) {
-      stepStudies.style.display = "block";
-      stepStudies.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (addToHistory) {
-        const url = new URL(window.location);
-        url.searchParams.delete("step");
-        window.history.pushState({ step: "studies" }, "", url);
-      }
-    } else if (stepName === "form" && stepForm) {
-      stepForm.style.display = "block";
-      stepForm.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (addToHistory) {
-        const url = new URL(window.location);
-        url.searchParams.set("step", "form");
-        window.history.pushState({ step: "form" }, "", url);
-      }
-    } else if (stepName === "thankyou" && stepThankYou) {
-      stepThankYou.style.display = "block";
-      stepThankYou.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (addToHistory) {
-        const url = new URL(window.location);
-        url.searchParams.set("step", "thankyou");
-        window.history.pushState({ step: "thankyou" }, "", url);
-      }
-    }
-  };
-
-  // Handle browser back/forward buttons
-  window.addEventListener("popstate", (e) => {
-    const step = e.state?.step || "studies";
-    showStep(step, false); // Don't add to history since we're already navigating history
-  });
-
-  // Initialize step based on URL parameter and set initial history state
-  const urlParams = new URLSearchParams(window.location.search);
-  const initialStep = urlParams.get("step");
-  if (initialStep === "form") {
-    showStep("form", false);
-    // Set initial state so back button works
-    window.history.replaceState({ step: "form" }, "", window.location);
-  } else if (initialStep === "thankyou") {
-    showStep("thankyou", false);
-    window.history.replaceState({ step: "thankyou" }, "", window.location);
-  } else {
-    // Ensure studies step is visible initially
-    showStep("studies", false);
-    // Remove step param if it exists, otherwise keep URL as-is
-    if (initialStep) {
-      urlParams.delete("step");
-      const newUrl =
-        window.location.pathname +
-        (urlParams.toString() ? "?" + urlParams.toString() : "");
-      window.history.replaceState({ step: "studies" }, "", newUrl);
-    } else {
-      // No step param, set initial state without modifying URL
-      window.history.replaceState({ step: "studies" }, "", window.location);
-    }
-  }
-
-  // --- Filters ---
-  const filtersToggle = document.querySelector(".cenexel-study-filters-toggle");
-  const filtersPanel = document.getElementById("cenexel-study-filters");
-  const sexRadios = document.querySelectorAll(
-    'input[name="cenexel_filter_sex"]'
-  );
-  const ageChecks = document.querySelectorAll(
-    'input[name="cenexel_filter_age"]'
-  );
-  const clearFiltersBtn = document.getElementById("cenexel-clear-filters");
-
-  // Toggle filters panel
-  if (filtersToggle && filtersPanel) {
-    filtersToggle.addEventListener("click", () => {
-      const isExpanded = filtersToggle.getAttribute("aria-expanded") === "true";
-      const newExpanded = !isExpanded;
-
-      filtersToggle.setAttribute("aria-expanded", newExpanded.toString());
-      filtersPanel.style.display = newExpanded ? "block" : "none";
-      filtersToggle.querySelector(
-        ".cenexel-study-filters-toggle-text"
-      ).textContent = newExpanded ? "Hide Filters" : "Show Filters";
-    });
-  }
-
-  const getActiveFilters = () => {
-    const sex = Array.from(sexRadios).find((r) => r.checked)?.value || "all";
-    const ages = new Set(
-      Array.from(ageChecks)
-        .filter((c) => c.checked)
-        .map((c) => c.value)
-    );
-    return { sex, ages };
-  };
-
-  const rowMatches = (row, filters) => {
-    const gender = (row.dataset.gender || "unknown").toLowerCase();
-    const buckets = new Set(
-      (row.dataset.ageBuckets || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    );
-
-    // Sex filter: if female/male, include exact match OR "all" (open to all)
-    if (filters.sex !== "all") {
-      if (!(gender === filters.sex || gender === "all")) return false;
-    }
-
-    // Age filter: if any selected, require intersection; unknown buckets fail
-    if (filters.ages.size > 0) {
-      let ok = false;
-      for (const a of filters.ages) {
-        if (buckets.has(a)) ok = true;
-      }
-      if (!ok) return false;
-    }
-
-    return true;
-  };
-
-  const applyFilters = () => {
-    const filters = getActiveFilters();
-
-    studyCards.forEach((card) => {
-      const visible = rowMatches(card, filters);
-      card.style.display = visible ? "" : "none";
-
-      // If a card is hidden, uncheck it so Continue doesn't stay enabled invisibly
-      if (!visible) {
-        const cb = card.querySelector(".cenexel-study-checkbox");
-        if (cb && cb.checked) {
-          cb.checked = false;
-          cb.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-      }
-    });
-
-    updateContinueState();
-  };
-
-  const clearFilters = () => {
-    // Sex -> All
-    const all = Array.from(sexRadios).find((r) => r.value === "all");
-    if (all) all.checked = true;
-    // Ages -> none
-    ageChecks.forEach((c) => (c.checked = false));
-    applyFilters();
-  };
-
-  // Wire filter events
-  sexRadios.forEach((r) => r.addEventListener("change", applyFilters));
-  ageChecks.forEach((c) => c.addEventListener("change", applyFilters));
-  if (clearFiltersBtn) clearFiltersBtn.addEventListener("click", clearFilters);
-
-  // Handle study selection - enable/disable continue button
-  if (studyCheckboxes.length > 0 && continueBtn) {
-    studyCheckboxes.forEach((checkbox) => {
-      checkbox.addEventListener("change", () => {
-        updateContinueState();
-      });
-    });
-
-    // Handle continue button click
-    continueBtn.addEventListener("click", () => {
-      if (selectedCampaignActivities.length === 0) {
-        studyError.textContent = "Please select at least one study.";
-        studyError.style.display = "block";
-        return;
-      }
-
-      // Navigate to form step
-      showStep("form");
-    });
-  }
-
-  // Make study cards clickable (but not the title link)
-  studyCards.forEach((card) => {
-    card.addEventListener("click", (e) => {
-      // Don't toggle if clicking the checkbox itself or a link
-      if (
-        e.target.classList.contains("cenexel-study-checkbox") ||
-        e.target.closest(".cenexel-study-title") ||
-        e.target.tagName === "A"
-      ) {
-        return;
-      }
-
-      // Toggle the checkbox
-      const checkbox = card.querySelector(".cenexel-study-checkbox");
-      if (checkbox) {
-        checkbox.checked = !checkbox.checked;
-        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+  // Handle study selection changes
+  studyCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      updateSelectionState();
     });
   });
+
+  // Build date_of_birth from dropdowns
+  const buildDob = () => {
+    const year = (form.querySelector('[name="dob_year"]')?.value || "").trim();
+    const month = (form.querySelector('[name="dob_month"]')?.value || "").trim();
+    const day = (form.querySelector('[name="dob_day"]')?.value || "").trim();
+    if (!year) return "";
+    const mm = month ? month.padStart(2, "0") : "";
+    const dd = day ? day.padStart(2, "0") : "";
+    if (mm && dd) return `${year}-${mm}-${dd}`;
+    if (mm) return `${year}-${mm}`;
+    return year;
+  };
+
+  // Validation
+  const validationBox = document.getElementById("cenexel-validation-errors");
+
+  const validateForm = () => {
+    const missing = [];
+    const val = (name) => (form.querySelector(`[name="${name}"]`)?.value || "").trim();
+
+    if (!val("first_name")) missing.push("First Name");
+    if (!val("last_name")) missing.push("Last Name");
+    if (!val("phone")) missing.push("Phone");
+    if (!val("zip")) missing.push("ZIP/Postal Code");
+    if (!val("dob_year")) missing.push("Date of Birth (Year)");
+    if (!val("gender")) missing.push("Gender");
+    if (!form.querySelector('[name="consent"]')?.checked) missing.push("Privacy Policy consent");
+
+    return missing;
+  };
+
+  const showValidationErrors = (missing) => {
+    if (!validationBox) return;
+    validationBox.innerHTML =
+      "<strong>Please complete the following required fields:</strong>" +
+      "<ul>" +
+      missing.map((f) => `<li>${f}</li>`).join("") +
+      "</ul>";
+    validationBox.style.display = "block";
+    validationBox.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const clearValidationErrors = () => {
+    if (validationBox) {
+      validationBox.style.display = "none";
+      validationBox.innerHTML = "";
+    }
+  };
 
   // Handle form submission
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    clearValidationErrors();
+
+    // Validate all required fields
+    const missing = validateForm();
+    if (missing.length > 0) {
+      showValidationErrors(missing);
+      return;
+    }
+
+    selectedCampaignActivities = getSelectedCampaignActivities();
+
     status.textContent = "Submitting...";
     status.className = "cenexel-status-loading";
 
     const fd = new FormData(form);
+    const emailValue = (fd.get("email") || "").toString().trim();
     const payload = {
       location_term_id: Number(fd.get("location_term_id")),
       site_slug: (fd.get("site_slug") || "").toString(),
       first_name: (fd.get("first_name") || "").toString().trim(),
       last_name: (fd.get("last_name") || "").toString().trim(),
-      email: (fd.get("email") || "").toString().trim(),
+      email: emailValue || "noemail@cenexel.com",
       phone: (fd.get("phone") || "").toString().trim(),
       zip: (fd.get("zip") || "").toString().trim(),
-      date_of_birth: (fd.get("date_of_birth") || "").toString().trim(),
+      date_of_birth: buildDob(),
       gender: (fd.get("gender") || "").toString(),
       is_caregiver:
         fd.get("is_caregiver") === "1" || fd.get("is_caregiver") === "on",
       consent: fd.get("consent") === "on",
       sms_consent: fd.get("sms_consent") === "on",
-      campaign_activities:
-        selectedCampaignActivities.length > 0
-          ? selectedCampaignActivities
-          : fd
-              .getAll("campaign_activities[]")
-              .map((x) => (x || "").toString().trim())
-              .filter(Boolean),
+      campaign_activities: selectedCampaignActivities,
+      studies: getSelectedStudies(),
+      event: new URLSearchParams(window.location.search).get("event") || "",
       // Add UTM parameters (last-touch attribution)
       ...window.CENEXEL_UTM?.current,
       // Add first-touch attribution
@@ -418,25 +282,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
 
-      // Success - show thank you page
-      showStep("thankyou");
+      // Success - show thank you, hide form
+      if (formWrapper) formWrapper.style.display = "none";
+      if (thankYou) {
+        thankYou.style.display = "block";
+        thankYou.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     } catch (err) {
       status.textContent =
         err?.message || "Submission failed. Please try again.";
       status.className = "cenexel-status-error";
     }
   });
-
-  // Handle back button on form page
-  const backToStudiesFromFormBtn = document.getElementById(
-    "cenexel-back-to-studies-from-form"
-  );
-  if (backToStudiesFromFormBtn) {
-    backToStudiesFromFormBtn.addEventListener("click", () => {
-      // Navigate back to studies step
-      showStep("studies");
-    });
-  }
 
   // Handle back button on thank you page
   const backToStudiesBtn = document.getElementById(
@@ -451,22 +308,17 @@ document.addEventListener("DOMContentLoaded", () => {
       studyCheckboxes.forEach((checkbox) => {
         checkbox.checked = false;
       });
-      if (continueBtn) continueBtn.disabled = true;
-      // Reset filters too
-      clearFilters();
-      // Collapse filters panel
-      if (filtersToggle && filtersPanel) {
-        filtersToggle.setAttribute("aria-expanded", "false");
-        filtersPanel.style.display = "none";
-        filtersToggle.querySelector(
-          ".cenexel-study-filters-toggle-text"
-        ).textContent = "Show Filters";
+      // Reset status and validation
+      if (status) {
+        status.textContent = "";
+        status.className = "";
       }
-      // Navigate back to studies
-      showStep("studies");
+      clearValidationErrors();
+      // Show form, hide thank you
+      if (formWrapper) formWrapper.style.display = "block";
+      if (thankYou) thankYou.style.display = "none";
+      // Scroll to top
+      formWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
-
-  // Initial filter application (in case defaults should hide/show)
-  applyFilters();
 });
