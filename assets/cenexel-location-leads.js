@@ -176,6 +176,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Handle "Other" checkbox toggle
+  const otherCheckbox = document.getElementById("cenexel-study-other");
+  const otherField = document.getElementById("cenexel-study-other-field");
+  const otherText = document.getElementById("cenexel-study-other-text");
+  if (otherCheckbox && otherField) {
+    otherCheckbox.addEventListener("change", () => {
+      otherField.style.display = otherCheckbox.checked ? "block" : "none";
+      if (!otherCheckbox.checked && otherText) otherText.value = "";
+    });
+  }
+
   // Build date_of_birth from dropdowns
   const buildDob = () => {
     const year = (form.querySelector('[name="dob_year"]')?.value || "").trim();
@@ -201,7 +212,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!val("phone")) missing.push("Phone");
     if (!val("zip")) missing.push("ZIP/Postal Code");
     if (!val("dob_year")) missing.push("Date of Birth (Year)");
-    if (!val("gender")) missing.push("Gender");
     if (!form.querySelector('[name="consent"]')?.checked) missing.push("Privacy Policy consent");
 
     return missing;
@@ -260,6 +270,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sms_consent: fd.get("sms_consent") === "on",
       campaign_activities: selectedCampaignActivities,
       studies: getSelectedStudies(),
+      study_other: otherCheckbox?.checked ? (otherText?.value || "").trim() : "",
       event: new URLSearchParams(window.location.search).get("event") || "",
       // Add UTM parameters (last-touch attribution)
       ...window.CENEXEL_UTM?.current,

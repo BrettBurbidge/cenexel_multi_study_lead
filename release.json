@@ -1,6 +1,6 @@
 {
-  "version": "0.9.46",
-  "date": "2026-02-19",
+  "version": "0.9.47",
+  "date": "2026-02-20",
   "notes": [
     "Consolidated multi-step flow into single page with form at top and study checklist below",
     "Simplified study list to checkbox + title layout (removed borders, gender, age, status, compensation)",

@@ -169,6 +169,32 @@ body.page .entry-content .cenexel-location-landing {
   color: #213eaa;
 }
 
+.cenexel-other-field {
+  padding-left: 2.25rem;
+  padding-bottom: 0.5rem;
+}
+
+.cenexel-other-field input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 2px solid #00a0e3;
+  border-radius: 9px;
+  font-size: 1rem;
+  color: #1a202c;
+  background: #fff;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.cenexel-other-field input::placeholder {
+  color: #9fa9bb;
+}
+
+.cenexel-other-field input:focus {
+  outline: none;
+  border-color: #0081c8;
+  box-shadow: 0 0 0 3px rgba(0, 129, 200, 0.15);
+}
+
 
 /* ===== Location hero - Elementor-matched structure ===== */
 

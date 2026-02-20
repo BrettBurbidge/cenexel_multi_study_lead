@@ -2,7 +2,7 @@
 /**
   * Plugin Name: CenExel Location Lead Landing
   * Description: /studies?site=<slug> or /studies?_location_city_state=<legacy> lists Clinical Trial posts and submits leads via email.
-  * Version: 0.9.46
+  * Version: 0.9.47
   */
 
 if (!defined('ABSPATH')) exit;
@@ -991,7 +991,7 @@ class Cenexel_Location_Leads {
               </div>
               <div class="cenexel-field">
                 <label for="cenexel-phone">Phone <span aria-hidden="true">*</span></label>
-                <input id="cenexel-phone" name="phone" type="tel" placeholder="Enter your phone" autocomplete="tel" required />
+                <input id="cenexel-phone" name="phone" type="tel" placeholder="Enter your phone" autocomplete="tel" maxlength="10" required />
               </div>
               <div class="cenexel-field">
                 <label for="cenexel-zip">ZIP/Postal Code <span aria-hidden="true">*</span></label>
@@ -1024,8 +1024,8 @@ class Cenexel_Location_Leads {
                 </div>
               </div>
               <div class="cenexel-field">
-                <label for="cenexel-gender">Gender <span aria-hidden="true">*</span></label>
-                <select id="cenexel-gender" name="gender" required>
+                <label for="cenexel-gender">Gender</label>
+                <select id="cenexel-gender" name="gender">
                   <option value="">Select</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
@@ -1094,6 +1094,25 @@ class Cenexel_Location_Leads {
                   </label>
                 <?php endforeach; ?>
               <?php endif; ?>
+              <label class="cenexel-study-item" for="cenexel-study-other">
+                <input
+                  class="cenexel-study-checkbox"
+                  type="checkbox"
+                  id="cenexel-study-other"
+                  name="study_other_checked"
+                  value="1"
+                />
+                <span class="cenexel-study-title">Other</span>
+              </label>
+              <div id="cenexel-study-other-field" class="cenexel-other-field" style="display: none;">
+                <input
+                  type="text"
+                  id="cenexel-study-other-text"
+                  name="study_other_text"
+                  placeholder="Please describe what you're interested in"
+                  maxlength="500"
+                />
+              </div>
             </div>
 
             <div id="cenexel-study-error" class="cenexel-error-message" style="display: none;"></div>
@@ -1175,6 +1194,7 @@ class Cenexel_Location_Leads {
       'sms_consent'      => (bool)($data['sms_consent'] ?? false),
       'campaign_activities' => $campaign_activities,
       'studies'          => is_array($data['studies'] ?? null) ? $data['studies'] : [],
+      'study_other'      => sanitize_text_field($data['study_other'] ?? ''),
       'event'            => sanitize_text_field($data['event'] ?? ''),
       'submitted_at'     => gmdate('c'),
       'source'           => 'cenexelclinicaltrials.com',
@@ -1237,15 +1257,26 @@ class Cenexel_Location_Leads {
 
     // Add studies as individual rows
     $studies = $payload['studies'];
-    if (!empty($studies)) {
-      foreach ($studies as $i => $study) {
+    $study_other = $payload['study_other'];
+    $has_studies = !empty($studies) || $study_other !== '';
+    if ($has_studies) {
+      $row_index = 0;
+      foreach ($studies as $study) {
         $title = sanitize_text_field($study['title'] ?? '');
         $ca = sanitize_text_field($study['campaign_activity'] ?? '');
         $display = $title ? $title . ' (' . $ca . ')' : $ca;
-        $label = $i === 0 ? 'Studies' : '';
+        $label = $row_index === 0 ? 'Studies' : '';
         $html .= '<tr>';
         $html .= '<td ' . $td_label . '>' . esc_html($label) . '</td>';
         $html .= '<td ' . $td_value . '>' . esc_html($display) . '</td>';
+        $html .= '</tr>';
+        $row_index++;
+      }
+      if ($study_other !== '') {
+        $label = $row_index === 0 ? 'Studies' : '';
+        $html .= '<tr>';
+        $html .= '<td ' . $td_label . '>' . esc_html($label) . '</td>';
+        $html .= '<td ' . $td_value . '>Other: ' . esc_html($study_other) . '</td>';
         $html .= '</tr>';
       }
     } else {
@@ -1256,11 +1287,10 @@ class Cenexel_Location_Leads {
     }
     $html .= '</table>';
 
-    $subject = sprintf('New Lead: %s %s – %s',
-      $payload['first_name'],
-      $payload['last_name'],
-      $payload['site_slug']
-    );
+    $event = $payload['event'];
+    $subject = $event !== ''
+      ? 'New Outreach Lead - ' . $event
+      : 'New Outreach Lead';
 
     $to_list = array_values(array_filter(array_map(function($e) {
       $e = trim($e);
